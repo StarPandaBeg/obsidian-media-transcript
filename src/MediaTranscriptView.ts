@@ -508,6 +508,8 @@ export class MediaTranscriptView extends FileView {
     } else {
       this.updateSearchCount();
     }
+
+    this.notifyTranscriptRendered();
   }
 
   /** Undo the text rewriting done by applySearch(). */
@@ -627,6 +629,10 @@ export class MediaTranscriptView extends FileView {
       const el = this.transcriptEl.createDiv('mt-segment');
       el.dataset.start = String(seg.startTime);
       el.dataset.end = String(seg.endTime);
+      // Stable identity for other plugins painting over the transcript: the
+      // segment's index in the track, and where it sits on the timeline.
+      el.dataset.mtSeg = String(seg.index);
+      el.dataset.mtStart = String(seg.startTime);
 
       // Timestamp chip doubles as "copy timestamp" (click it) — no extra button.
       const ts = el.createDiv('mt-ts');
@@ -697,6 +703,28 @@ export class MediaTranscriptView extends FileView {
 
       this.segmentEls.push(el);
     }
+
+    this.notifyTranscriptRendered();
+  }
+
+  /**
+   * Tell anyone painting over the transcript that its DOM was rebuilt.
+   *
+   * Fired after every rebuild — a fresh track, and each time search highlighting
+   * rewrites the segment text — so a listener can reapply its own decorations
+   * idempotently rather than tracking which of our operations invalidated them.
+   * We don't know or care who listens; this is a one-way announcement.
+   */
+  private notifyTranscriptRendered() {
+    this.contentEl.dispatchEvent(
+      new CustomEvent('mt:transcript-rendered', {
+        bubbles: true,
+        detail: {
+          mediaPath: this.mediaFile?.path ?? null,
+          trackPath: this.trackSelect?.value ?? null,
+        },
+      }),
+    );
   }
 
   // ─── Playback sync ────────────────────────────────────────────────────────
