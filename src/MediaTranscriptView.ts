@@ -662,6 +662,9 @@ export class MediaTranscriptView extends FileView {
 
       // Main click → seek
       el.addEventListener('click', () => {
+        // Finishing a text selection also fires a click. Jumping then would
+        // yank playback away just as someone highlights or copies a line.
+        if ((window.getSelection()?.toString().length ?? 0) > 0) return;
         // An explicit jump means the user is done reading ahead: let
         // auto-scroll take over again right away.
         this.manualScrollUntil = 0;

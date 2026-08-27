@@ -310,6 +310,15 @@ video.mt-media {
   user-select: none;
 }
 
+/* The words themselves stay selectable — for copying a line, and so other
+   plugins can annotate one. The chips around them don't: dragging across a
+   timestamp to reach the text shouldn't pick the timestamp up too. */
+.mt-txt {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
 .mt-segment:hover {
   background: var(--background-modifier-hover);
 }

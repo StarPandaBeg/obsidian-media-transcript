@@ -79,6 +79,13 @@ MediaTranscriptView.onLoadFile()
   把 `currentTime / playbackRate / paused` 搬过去（新元素 `readyState === 0` 时
   推迟到 `loadedmetadata` 再 seek）。纯音频模式用 `<audio>` 播视频文件（同一套解码器），
   万一某容器不支持会触发 `error` → Notice 提示并自动退回视频模式。
+- **文字可选**：`.mt-txt` 显式 `user-select: text`（Obsidian 从 `body` 往下继承的是
+  `none`，所以必须显式打开）。这样才能划选复制，别的插件也才能在字幕上做标注。
+  时间戳/说话人小块保持不可选，免得拖选时把它们一起带上。
+  段落的 click→seek 会在**存在选区时跳过**，否则划完文字就被拽走播放位置。
+- **对外广播**：每次重建字幕 DOM（换轨、搜索高亮重写 `.mt-txt`）后派发冒泡的
+  `mt:transcript-rendered`，detail 带 `mediaPath` / `trackPath`；每段带
+  `data-mt-seg` / `data-mt-start`。单向，本插件不关心谁在听。
 - **交互**：左键点段落 → seek+play；右键 → 菜单（从此处播放 / 复制时间戳 / 复制文字）；
   点左侧时间块 → 复制时间戳；hover 仅高亮，不弹按钮（不影响布局）。
 - **扩展名接管**：`main.ts` 逐个 `registerExtensions`，被其他插件占用时先
