@@ -635,12 +635,20 @@ export class MediaTranscriptView extends FileView {
       el.dataset.mtStart = String(seg.startTime);
 
       // Timestamp chip doubles as "copy timestamp" (click it) — no extra button.
+      // The timestamp is the play control. Seeking used to be bound to the
+      // whole line, which fought with selecting the words: every attempt to
+      // highlight or copy a phrase also jumped playback. Separating the two
+      // by target beats guessing from whether a selection exists.
       const ts = el.createDiv('mt-ts');
       ts.setText(formatTime(seg.startTime));
-      ts.setAttribute('title', 'Copy timestamp');
+      ts.setAttribute('title', 'Play from here');
       ts.addEventListener('click', (e: MouseEvent) => {
         e.stopPropagation();
-        void navigator.clipboard.writeText(formatTime(seg.startTime));
+        this.manualScrollUntil = 0;
+        if (this.mediaEl) {
+          this.mediaEl.currentTime = seg.startTime;
+          if (this.mediaEl.paused) void this.mediaEl.play();
+        }
       });
 
       // Speaker prefix chip — only when multiple speakers, distinct color each.
@@ -659,20 +667,6 @@ export class MediaTranscriptView extends FileView {
       const txt = el.createDiv('mt-txt');
       txt.setText(seg.text);
       this.txtEls.push(txt);
-
-      // Main click → seek
-      el.addEventListener('click', () => {
-        // Finishing a text selection also fires a click. Jumping then would
-        // yank playback away just as someone highlights or copies a line.
-        if ((window.getSelection()?.toString().length ?? 0) > 0) return;
-        // An explicit jump means the user is done reading ahead: let
-        // auto-scroll take over again right away.
-        this.manualScrollUntil = 0;
-        if (this.mediaEl) {
-          this.mediaEl.currentTime = seg.startTime;
-          if (this.mediaEl.paused) void this.mediaEl.play();
-        }
-      });
 
       // Right-click → context menu
       el.addEventListener('contextmenu', (e: MouseEvent) => {
@@ -719,6 +713,14 @@ export class MediaTranscriptView extends FileView {
    * We don't know or care who listens; this is a one-way announcement.
    */
   private notifyTranscriptRendered() {
+    // Stamp the panel as well as announcing it. An event only reaches whoever
+    // was listening at the time; a plugin loaded while a transcript is already
+    // on screen would otherwise have no way to learn what it is looking at.
+    if (this.transcriptEl) {
+      this.transcriptEl.dataset.mtMedia = this.mediaFile?.path ?? '';
+      this.transcriptEl.dataset.mtTrack = this.trackSelect?.value ?? '';
+    }
+
     this.contentEl.dispatchEvent(
       new CustomEvent('mt:transcript-rendered', {
         bubbles: true,

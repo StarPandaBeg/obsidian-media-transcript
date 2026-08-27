@@ -310,9 +310,9 @@ video.mt-media {
   user-select: none;
 }
 
-/* The words themselves stay selectable — for copying a line, and so other
-   plugins can annotate one. The chips around them don't: dragging across a
-   timestamp to reach the text shouldn't pick the timestamp up too. */
+/* The words are for reading and selecting — copying a line by hand, and
+   letting other plugins annotate one. Playback is driven from the timestamp
+   instead, so the two never compete for the same click. */
 .mt-txt {
   user-select: text;
   -webkit-user-select: text;
@@ -329,7 +329,14 @@ video.mt-media {
 }
 
 /* Timestamp chip */
+/* The play control: small, but it is the one thing here you click. */
+.mt-ts:hover {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+}
+
 .mt-ts {
+  cursor: pointer;
   display: inline-block;
   vertical-align: baseline;
   margin-right: 6px;

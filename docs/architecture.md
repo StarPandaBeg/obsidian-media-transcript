@@ -83,10 +83,17 @@ MediaTranscriptView.onLoadFile()
   `none`，所以必须显式打开）。这样才能划选复制，别的插件也才能在字幕上做标注。
   时间戳/说话人小块保持不可选，免得拖选时把它们一起带上。
   段落的 click→seek 会在**存在选区时跳过**，否则划完文字就被拽走播放位置。
-- **对外广播**：每次重建字幕 DOM（换轨、搜索高亮重写 `.mt-txt`）后派发冒泡的
-  `mt:transcript-rendered`，detail 带 `mediaPath` / `trackPath`；每段带
-  `data-mt-seg` / `data-mt-start`。单向，本插件不关心谁在听。
-- **交互**：左键点段落 → seek+play；右键 → 菜单（从此处播放 / 复制时间戳 / 复制文字）；
+- **对外广播**：每次重建字幕 DOM（换轨、搜索高亮重写 `.mt-txt`）后：
+  - 在 `.mt-transcript` 上写 `data-mt-media` / `data-mt-track`
+  - 派发冒泡的 `mt:transcript-rendered`（detail 同上）
+  - 每段带 `data-mt-seg` / `data-mt-start`
+
+  **两者都要**：事件只能被「当时在听的人」收到，而 DOM 属性任何时候都能读。
+  在字幕已经打开之后才被启用的插件收不到事件，只能靠属性。单向，本插件不关心谁在听。
+- **播放入口是时间戳，不是整行**：点 `.mt-ts` 才 seek+play。原来点整行会 seek，
+  和「选中文字」抢同一个点击 —— 每次想划词或复制都会把播放位置带走。
+  按**目标元素**分开比按「有没有选区」猜要可靠。
+- **交互**：右键 → 菜单（从此处播放 / 复制时间戳 / 复制文字）；
   点左侧时间块 → 复制时间戳；hover 仅高亮，不弹按钮（不影响布局）。
 - **扩展名接管**：`main.ts` 逐个 `registerExtensions`，被其他插件占用时先
   `unregisterExtensions` 再接管，避免冲突导致加载失败。
