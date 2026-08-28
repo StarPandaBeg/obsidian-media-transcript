@@ -86,9 +86,17 @@ export class MediaTranscriptView extends FileView {
       const resolved = findMediaForSubtitle(file, this.app.vault, this.plugin.settings);
       if (!resolved) {
         this.mediaFile = null;
+        // `.json` is registered wholesale, so plenty of files land here that
+        // were never subtitles. Saying "no media found" misdiagnoses those —
+        // the problem isn't a missing sibling, it's that this isn't a subtitle.
+        const isSubtitle = await this.parsesAsSubtitle(file);
         this.contentEl.createDiv('mt-empty').setText(
-          `No media file found next to "${file.name}".\n` +
-            'Place a same-named audio/video file (e.g. .mp4 / .m4a / .mp3) in the same folder.',
+          isSubtitle
+            ? `No media file found next to "${file.name}".\n` +
+                'Place a same-named audio/video file (e.g. .mp4 / .m4a / .mp3) in the same folder.'
+            : `"${file.name}" isn't a subtitle file.\n` +
+                'This view opens .srt / .vtt / .json subtitles that sit next to an audio or video file. ' +
+                'All .json files open here because extensions are claimed whole, not per file.',
         );
         return;
       }
@@ -102,6 +110,23 @@ export class MediaTranscriptView extends FileView {
     );
 
     await this.buildLayout();
+  }
+
+  /**
+   * Does this file actually contain subtitles?
+   *
+   * `.json` is registered wholesale, so all sorts of files land here that were
+   * never subtitles. The two cases need opposite advice — "add media next to
+   * it" versus "this was never a subtitle" — and only the content can tell
+   * them apart, since plenty of real subtitle tracks are also called .json.
+   */
+  private async parsesAsSubtitle(file: TFile): Promise<boolean> {
+    if (file.extension.toLowerCase() !== 'json') return true;
+    try {
+      return parseSubtitle(await this.app.vault.read(file), 'json').length > 0;
+    } catch {
+      return false;
+    }
   }
 
   /**
