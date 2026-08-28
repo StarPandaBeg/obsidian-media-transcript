@@ -98,6 +98,20 @@ MediaTranscriptView.onLoadFile()
 - **扩展名接管**：`main.ts` 逐个 `registerExtensions`，被其他插件占用时先
   `unregisterExtensions` 再接管，避免冲突导致加载失败。
 
+## 开发循环
+
+```bash
+npm run dev    # esbuild watch，每次构建后自动复制到 dev vault
+```
+
+部署**用复制不用软链** —— 本 repo 在 iCloud Drive 上，把 vault 指向 iCloud 路径
+有 Obsidian 卡在被 evict 的文件上的风险。目标目录由 `VAULT_PLUGIN_DIR` 覆盖，
+置空则跳过（CI 就是这么做的）。`styles.css` 不是 esbuild 的输入，所以单独 watch。
+
+构建时会写一个空的 `.hotreload` 标记，装了 pjeby/hot-reload 就能**存盘即重载**，
+不用退出 Obsidian。之前一直要手动重启，就是因为少了这个文件 —— hot-reload
+只盯带标记的插件目录。
+
 ## 字幕文件命名约定
 
 Pattern：`{mediaBasename}[.{marker}].{subExt}`

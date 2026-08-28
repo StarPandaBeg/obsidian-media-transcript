@@ -1,6 +1,10 @@
 import esbuild from "esbuild";
 import process from "process";
 import { builtinModules } from "node:module";
+import { copyFile, mkdir, writeFile, access } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
+import { join, dirname } from "node:path";
+import { homedir } from "node:os";
 
 const builtins = [...builtinModules, ...builtinModules.map(m => `node:${m}`)];
 
@@ -11,6 +15,47 @@ If you want to view the source, please visit the GitHub repository of this plugi
 `;
 
 const prod = process.argv[2] === "production";
+
+// ── Deploy to the development vault ──────────────────────────────────────────
+//
+// Copy rather than symlink: this repo lives in iCloud Drive, and pointing a
+// vault at an iCloud path risks Obsidian stalling on a file iCloud has evicted.
+//
+// Override with VAULT_PLUGIN_DIR, or set it empty to skip (CI does).
+const PLUGIN_ID = JSON.parse(await readFile("manifest.json", "utf8")).id;
+const vaultDir =
+  process.env.VAULT_PLUGIN_DIR ??
+  join(homedir(), "Desktop/ob/me/.obsidian/plugins", PLUGIN_ID);
+const ASSETS = ["main.js", "manifest.json", "styles.css"];
+
+async function exists(p) {
+  try { await access(p); return true; } catch { return false; }
+}
+
+async function deploy() {
+  if (!vaultDir) return;
+  if (!(await exists(dirname(dirname(vaultDir))))) {
+    console.log(`  (no vault at ${vaultDir}, skipping deploy)`);
+    return;
+  }
+  await mkdir(vaultDir, { recursive: true });
+  for (const asset of ASSETS) {
+    if (await exists(asset)) await copyFile(asset, join(vaultDir, asset));
+  }
+  // Marker for pjeby/hot-reload: with that plugin installed, Obsidian reloads
+  // this one whenever main.js changes. Inert if it isn't installed.
+  await writeFile(join(vaultDir, ".hotreload"), "");
+  console.log(`  deployed → ${vaultDir}`);
+}
+
+const deployPlugin = {
+  name: "deploy-to-vault",
+  setup(build) {
+    build.onEnd(async result => {
+      if (result.errors.length === 0) await deploy();
+    });
+  },
+};
 
 const context = await esbuild.context({
   banner: { js: banner },
@@ -38,11 +83,16 @@ const context = await esbuild.context({
   sourcemap: prod ? false : "inline",
   treeShaking: true,
   outfile: "main.js",
+  plugins: [deployPlugin],
 });
 
 if (prod) {
   await context.rebuild();
   process.exit(0);
 } else {
+  // styles.css isn't an esbuild input, so watch it separately — editing CSS
+  // should reach the vault without touching a .ts file to force a rebuild.
+  const { watch } = await import("node:fs");
+  watch("styles.css", () => { void deploy(); });
   await context.watch();
 }
