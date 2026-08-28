@@ -104,15 +104,36 @@ interface RawSegment {
   speaker_id?: unknown;
 }
 
-function toSegment(seg: RawSegment, i: number): SubtitleSegment {
+/**
+ * Turn one raw entry into a segment, or null if it isn't one.
+ *
+ * A subtitle line is text at a time; an entry carrying no text is not a line,
+ * whatever else it holds. Mapping those through anyway produced blank
+ * clickable rows in the transcript — and, because "did this parse" is also how
+ * we decide whether a file was ever a subtitle, made any JSON array of objects
+ * look like a subtitle track with its media missing.
+ */
+function toSegment(seg: RawSegment): Omit<SubtitleSegment, 'index'> | null {
+  const text = String(seg.text ?? seg.content ?? '').trim();
+  if (text.length === 0) return null;
+
   const speaker = seg.speaker ?? seg.speaker_id;
   return {
-    index: i + 1,
     startTime: Number(seg.start ?? seg.startTime ?? 0),
     endTime: Number(seg.end ?? seg.endTime ?? 0),
-    text: String(seg.text ?? seg.content ?? '').trim(),
+    text,
     speaker: typeof speaker === 'string' || typeof speaker === 'number' ? speaker : undefined,
   };
+}
+
+/** Drop the entries that weren't segments, then number what's left. */
+function collect(raw: RawSegment[]): SubtitleSegment[] {
+  const out: SubtitleSegment[] = [];
+  for (const entry of raw) {
+    const seg = toSegment(entry);
+    if (seg) out.push({ ...seg, index: out.length + 1 });
+  }
+  return out;
 }
 
 export function parseJSON(content: string): SubtitleSegment[] {
@@ -125,12 +146,12 @@ export function parseJSON(content: string): SubtitleSegment[] {
 
   // Whisper verbose_json / local-asr format: { segments: [...] }
   if (data && typeof data === 'object' && Array.isArray((data as { segments?: unknown }).segments)) {
-    return ((data as { segments: RawSegment[] }).segments).map(toSegment);
+    return collect((data as { segments: RawSegment[] }).segments);
   }
 
   // Plain array format: [{start, end, text}]
   if (Array.isArray(data)) {
-    return (data as RawSegment[]).map(toSegment);
+    return collect(data as RawSegment[]);
   }
 
   return [];

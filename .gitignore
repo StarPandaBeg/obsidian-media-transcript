@@ -4,3 +4,4 @@ main.js
 .DS_Store
 .obsidian-plugin-link
 data.json
+coverage/

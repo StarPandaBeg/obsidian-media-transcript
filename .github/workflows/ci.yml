@@ -26,5 +26,11 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      - name: Test
+        run: npm test
+
       - name: Build
+        # VAULT_PLUGIN_DIR empty so the build skips the local vault deploy.
         run: npm run build
+        env:
+          VAULT_PLUGIN_DIR: ""

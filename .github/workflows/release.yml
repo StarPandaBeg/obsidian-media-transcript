@@ -34,8 +34,14 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build
+        env:
+          VAULT_PLUGIN_DIR: ""
+
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
