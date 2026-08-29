@@ -59,35 +59,40 @@ export function findSubtitleFiles(
 }
 
 /**
- * Sort found subtitle files according to the user's configured priority list.
+ * Sort a media file's subtitle files into the order they should be preferred.
  *
- * Priority list entries are matched against the [marker] part of the filename.
- * Files whose marker is in the list come before files whose marker is not.
- * Within the same priority level, prefer SRT > VTT > JSON.
+ * The first entry is what opens by default, so this decides which
+ * transcription a recording is normally read through.
  *
- * TODO: This is where YOUR input matters!
+ * Priority entries name the `[marker]` part of the filename, best first, with
+ * the empty marker standing for the plain `video.srt` form. A marker the list
+ * does not mention ranks after every one it does: an unlisted track is not
+ * rejected, it is simply not what was asked for.
  *
- * The function receives:
- *   - `found`      — all subtitle files discovered for this media file
- *   - `priorities` — user's priority list from settings (ordered, index 0 = highest)
- *
- * You decide:
- *   - What rank to assign files whose marker doesn't appear in the priority list?
- *     (e.g., push them to the end, or treat them as equal to the lowest priority?)
- *   - How to break ties when two files share the same priority rank?
- *     (e.g., prefer a specific format like SRT over VTT?)
- *
- * The first item in the returned array will be loaded automatically on open.
- * Users can still switch tracks via the dropdown in the UI.
+ * Ties break on format — SRT, then VTT, then JSON — because that is the order
+ * they carry the least machinery for the same words. Anything still tied keeps
+ * the order it was found in, so the result is stable from one open to the next.
  */
+const FORMAT_ORDER = ['srt', 'vtt', 'json'];
+
 export function resolvePriority(
   found: FoundSubtitleFile[],
   priorities: SubtitlePriority[],
 ): FoundSubtitleFile[] {
-  // TODO: implement your priority sorting logic here (5-10 lines)
-  // Hint: build a Map from marker → rank index, then sort `found` by that rank.
-  // Files with markers not in the list should get rank = priorities.length (i.e., last).
-  return found;
+  const rankOf = new Map(priorities.map((p, i) => [p.marker.trim(), i]));
+  const rank = (f: FoundSubtitleFile) => rankOf.get(f.marker.trim()) ?? priorities.length;
+  const format = (f: FoundSubtitleFile) => {
+    const at = FORMAT_ORDER.indexOf(f.extension.toLowerCase());
+    return at < 0 ? FORMAT_ORDER.length : at;
+  };
+
+  return found
+    .map((file, found_at) => ({ file, found_at }))
+    .sort((a, b) =>
+      rank(a.file) - rank(b.file) ||
+      format(a.file) - format(b.file) ||
+      a.found_at - b.found_at)
+    .map(entry => entry.file);
 }
 
 /**
