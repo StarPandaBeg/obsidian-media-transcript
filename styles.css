@@ -107,6 +107,9 @@ video.mt-media {
   top: 0;
   z-index: 2;
   flex-shrink: 0;
+  /* Wraps rather than overflowing. A phone is the obvious narrow case, but so
+     is a split pane on a desktop — so this is width, not platform. */
+  flex-wrap: wrap;
 }
 
 .mt-audio-bar-icon {
@@ -127,7 +130,9 @@ video.mt-media {
 
 .mt-media-audio {
   flex: 1 1 auto;
-  min-width: 220px;
+  /* Narrow enough to sit beside the title on a phone; the browser's own
+     controls stay usable well below this. */
+  min-width: 180px;
   max-width: 560px;
   height: 36px;
   outline: none;
