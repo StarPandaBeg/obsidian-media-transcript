@@ -1,6 +1,6 @@
 {
   "name": "obsidian-media-transcript",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Obsidian plugin: media player with synchronized transcript",
   "main": "main.js",
   "scripts": {

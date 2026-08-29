@@ -114,7 +114,11 @@ interface RawSegment {
  * look like a subtitle track with its media missing.
  */
 function toSegment(seg: RawSegment): Omit<SubtitleSegment, 'index'> | null {
-  const text = String(seg.text ?? seg.content ?? '').trim();
+  // Only a string or a number is text. Coercing whatever turned up would turn
+  // a nested object into the literal "[object Object]" and pass it off as a
+  // subtitle line — which is worse than not reading the file, because it looks
+  // like it worked.
+  const text = asText(seg.text) ?? asText(seg.content) ?? '';
   if (text.length === 0) return null;
 
   const speaker = seg.speaker ?? seg.speaker_id;
@@ -124,6 +128,12 @@ function toSegment(seg: RawSegment): Omit<SubtitleSegment, 'index'> | null {
     text,
     speaker: typeof speaker === 'string' || typeof speaker === 'number' ? speaker : undefined,
   };
+}
+
+function asText(value: unknown): string | null {
+  if (typeof value === 'string') return value.trim() || null;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return null;
 }
 
 /** Drop the entries that weren't segments, then number what's left. */

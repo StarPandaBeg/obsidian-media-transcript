@@ -104,3 +104,31 @@ describe('parseSubtitle dispatch', () => {
     expect(parseSubtitle('anything', 'txt')).toEqual([]);
   });
 });
+
+// Coercing whatever turned up made a nested object into the literal
+// "[object Object]" and passed it off as a subtitle line — worse than failing
+// to read the file, because it looks like it worked.
+describe('entries whose text is not text', () => {
+  it('ignores an object where the text should be', () => {
+    expect(parseJSON(JSON.stringify([{ start: 0, end: 1, text: { zh: '你好' } }]))).toEqual([]);
+  });
+
+  it('ignores an array, a boolean and a null', () => {
+    const raw = JSON.stringify([
+      { start: 0, end: 1, text: ['a', 'b'] },
+      { start: 1, end: 2, text: true },
+      { start: 2, end: 3, text: null },
+    ]);
+    expect(parseJSON(raw)).toEqual([]);
+  });
+
+  it('still reads a number, which is text a speaker said', () => {
+    const [only] = parseJSON(JSON.stringify([{ start: 0, end: 1, text: 2023 }]));
+    expect(only.text).toBe('2023');
+  });
+
+  it('falls through to content when text is not usable', () => {
+    const [only] = parseJSON(JSON.stringify([{ start: 0, end: 1, text: {}, content: '有内容' }]));
+    expect(only.text).toBe('有内容');
+  });
+});
