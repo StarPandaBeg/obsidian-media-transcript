@@ -3,11 +3,18 @@ import type MediaTranscriptPlugin from './main';
 import {
   findSubtitleFiles,
   findMediaForSubtitle,
+  findRemoteDescriptorForMedia,
+  findRemoteDescriptorForSubtitle,
   resolvePriority,
   FoundSubtitleFile,
   SUBTITLE_EXTENSIONS,
 } from './utils/subtitleFinder';
-import { parseSubtitle, SubtitleSegment, formatTime } from './utils/subtitleParser';
+import {
+  parseSubtitle,
+  parseFileUrl,
+  SubtitleSegment,
+  formatTime,
+} from './utils/subtitleParser';
 
 // Transcript text size bounds (px). Defined here rather than in settings.ts to
 // keep the import direction one-way: settings.ts → this file.
@@ -38,6 +45,11 @@ export class MediaTranscriptView extends FileView {
   // The media file actually being played. Usually equals `this.file`, but when
   // a subtitle file is opened directly it's the media we resolved for it.
   private mediaFile: TFile | null = null;
+  // Kept separately because a remote descriptor may override the local media,
+  // or replace it entirely when a transcript is opened on its own.
+  private localMediaFile: TFile | null = null;
+  private remoteFileUrl: string | null = null;
+  private standaloneTrack: FoundSubtitleFile | null = null;
   // When opened via a subtitle file, the track to auto-select instead of the
   // priority-sorted default (null otherwise).
   private preferredTrackPath: string | null = null;
@@ -78,6 +90,9 @@ export class MediaTranscriptView extends FileView {
     this.contentEl.removeClass('mt-audio-mode');
     this.preferredTrackPath = null;
     this.transcriptSideEl = null;
+    this.localMediaFile = null;
+    this.remoteFileUrl = null;
+    this.standaloneTrack = null;
 
     // If a subtitle file was opened directly, resolve the media it belongs to
     // (prefer video, else audio) and play that instead, pre-selecting this track.
@@ -85,6 +100,25 @@ export class MediaTranscriptView extends FileView {
     if (SUBTITLE_EXTENSIONS.includes(file.extension.toLowerCase())) {
       const resolved = findMediaForSubtitle(file, this.app.vault, this.plugin.settings);
       if (!resolved) {
+        const descriptor = findRemoteDescriptorForSubtitle(file, this.app.vault);
+        const fileUrl = descriptor ? await this.readRemoteFileUrl(descriptor) : null;
+
+        // A matching remote descriptor lets a transcript play without a
+        // same-named local media file.
+        if (fileUrl) {
+          this.mediaFile = file;
+          this.remoteFileUrl = fileUrl;
+          this.isVideo = true;
+          this.preferredTrackPath = file.path;
+          this.standaloneTrack = {
+            file,
+            marker: '',
+            extension: file.extension.toLowerCase(),
+          };
+          await this.buildLayout();
+          return;
+        }
+
         this.mediaFile = null;
         // `.json` is registered wholesale, so plenty of files land here that
         // were never subtitles. Saying "no media found" misdiagnoses those —
@@ -104,12 +138,24 @@ export class MediaTranscriptView extends FileView {
       this.preferredTrackPath = file.path;
     }
     this.mediaFile = mediaFile;
+    this.localMediaFile = mediaFile;
+
+    const descriptor = findRemoteDescriptorForMedia(mediaFile, this.app.vault);
+    this.remoteFileUrl = descriptor ? await this.readRemoteFileUrl(descriptor) : null;
 
     this.isVideo = this.plugin.settings.supportedVideoExtensions.includes(
       mediaFile.extension.toLowerCase(),
     );
 
     await this.buildLayout();
+  }
+
+  private async readRemoteFileUrl(file: TFile): Promise<string | null> {
+    try {
+      return parseFileUrl(await this.app.vault.read(file));
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -258,18 +304,19 @@ export class MediaTranscriptView extends FileView {
   // ─── Media player ─────────────────────────────────────────────────────────
 
   private buildVideoPlayer(container: HTMLElement, file: TFile) {
-    const resourcePath = this.app.vault.getResourcePath(file);
+    const resourcePath = this.mediaSource(file);
     const wrapper = container.createDiv('mt-player-wrapper');
     this.mediaEl = wrapper.createEl('video', {
       cls: 'mt-media',
       attr: { src: resourcePath, controls: '' },
     });
+    this.installMediaErrorHandler(this.mediaEl);
     this.buildSpeedControl(wrapper);
     this.mediaEl.addEventListener('timeupdate', () => this.syncHighlight());
   }
 
   private buildAudioBar(container: HTMLElement, file: TFile) {
-    const resourcePath = this.app.vault.getResourcePath(file);
+    const resourcePath = this.mediaSource(file);
     container.createSpan('mt-audio-bar-icon').setText(this.isVideo ? '🎧' : '🎵');
     container.createSpan('mt-audio-bar-title').setText(file.basename);
     const audio = container.createEl('audio', {
@@ -277,22 +324,41 @@ export class MediaTranscriptView extends FileView {
       attr: { src: resourcePath, controls: '' },
     });
     this.mediaEl = audio;
+    this.installMediaErrorHandler(audio);
     this.buildSpeedControl(container);
     audio.addEventListener('timeupdate', () => this.syncHighlight());
+  }
 
-    // A video played through an <audio> element normally works (same demuxers),
-    // but some containers refuse. If that happens, fall back to the video player
-    // rather than leaving the user with a dead control bar.
-    if (this.isVideo) {
-      audio.addEventListener('error', () => {
-        // Teardown clears src first, so this only fires on a real decode failure.
-        if (!audio.getAttribute('src') || this.mediaEl !== audio) return;
+  private mediaSource(file: TFile): string {
+    return this.remoteFileUrl ?? this.app.vault.getResourcePath(this.localMediaFile ?? file);
+  }
+
+  private installMediaErrorHandler(media: HTMLVideoElement | HTMLAudioElement) {
+    media.addEventListener('error', () => {
+      // Teardown clears src first, so ignore its synthetic error event.
+      if (!media.getAttribute('src') || this.mediaEl !== media) return;
+
+      // A remote descriptor is an override, not a reason to make an existing
+      // local file unusable. If the URL cannot be loaded or decoded, retry the
+      // same player with the local vault resource.
+      if (this.remoteFileUrl && this.localMediaFile) {
+        const localSource = this.app.vault.getResourcePath(this.localMediaFile);
+        this.remoteFileUrl = null;
+        new Notice('Remote media could not be played — using the local file.');
+        media.src = localSource;
+        media.load();
+        return;
+      }
+
+      // A video played through an <audio> element normally works (same
+      // demuxers), but some containers refuse. Show the video player instead.
+      if (media instanceof HTMLAudioElement && this.isVideo) {
         new Notice('This video cannot be played as audio only — showing the picture again.');
         this.plugin.settings.videoAudioOnly = false;
         void this.plugin.saveSettings();
         void this.buildLayout();
-      });
-    }
+      }
+    });
   }
 
   private buildSpeedControl(container: HTMLElement) {
@@ -364,7 +430,9 @@ export class MediaTranscriptView extends FileView {
     }
 
     // Find & load subtitle files
-    this.subtitleTracks = findSubtitleFiles(file, this.app.vault, this.plugin.settings);
+    this.subtitleTracks = this.standaloneTrack
+      ? [this.standaloneTrack]
+      : findSubtitleFiles(file, this.app.vault, this.plugin.settings);
     const sorted = resolvePriority(this.subtitleTracks, this.plugin.settings.priorities);
     this.populateTrackSelect(sorted);
 

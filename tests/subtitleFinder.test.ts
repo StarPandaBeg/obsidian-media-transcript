@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { resolvePriority, type FoundSubtitleFile } from '../src/utils/subtitleFinder';
+import {
+  findRemoteDescriptorForMedia,
+  findRemoteDescriptorForSubtitle,
+  findSubtitleFiles,
+  resolvePriority,
+  type FoundSubtitleFile,
+} from '../src/utils/subtitleFinder';
 import type { SubtitlePriority } from '../src/settings';
 
 const track = (marker: string, extension: string): FoundSubtitleFile =>
@@ -52,5 +58,52 @@ describe('resolvePriority', () => {
 
   it('has nothing to do for a recording with no subtitles', () => {
     expect(resolvePriority([], prefer('whisper'))).toEqual([]);
+  });
+});
+
+const file = (name: string, dir = 'media') => {
+  const dot = name.lastIndexOf('.');
+  return {
+    name,
+    path: `${dir}/${name}`,
+    basename: name.slice(0, dot),
+    extension: name.slice(dot + 1),
+    parent: { path: dir },
+  } as never;
+};
+
+const vaultWith = (...files: ReturnType<typeof file>[]) => ({ getFiles: () => files }) as never;
+
+describe('remote media descriptors', () => {
+  it('finds the descriptor next to a local media file', () => {
+    const media = file('lecture.mp4');
+    const remote = file('lecture.remote');
+    expect(findRemoteDescriptorForMedia(media, vaultWith(media, remote))).toBe(remote);
+  });
+
+  it('finds a descriptor from a marked transcript without local media', () => {
+    const transcript = file('lecture.whisper.json');
+    const remote = file('lecture.remote.json');
+    expect(findRemoteDescriptorForSubtitle(transcript, vaultWith(transcript, remote))).toBe(remote);
+  });
+
+  it('prefers .remote when both descriptor spellings exist', () => {
+    const media = file('lecture.mp4');
+    const remote = file('lecture.remote');
+    const remoteJson = file('lecture.remote.json');
+    expect(findRemoteDescriptorForMedia(media, vaultWith(remoteJson, remote))).toBe(remote);
+  });
+
+  it('does not include the descriptor among subtitle tracks', () => {
+    const media = file('lecture.mp4');
+    const transcript = file('lecture.whisper.json');
+    const remote = file('lecture.remote.json');
+    const settings = {
+      subtitleDirectory: '',
+      supportedVideoExtensions: ['mp4'],
+      supportedAudioExtensions: [],
+    } as never;
+    const found = findSubtitleFiles(media, vaultWith(media, transcript, remote), settings);
+    expect(found.map(track => track.file.name)).toEqual(['lecture.whisper.json']);
   });
 });

@@ -2,7 +2,7 @@ import { App, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 import { MediaTranscriptView, VIEW_TYPE_MEDIA_TRANSCRIPT } from './MediaTranscriptView';
 import { MediaTranscriptSettingTab, DEFAULT_SETTINGS } from './settings';
 import type { MediaTranscriptSettings } from './settings';
-import { SUBTITLE_EXTENSIONS } from './utils/subtitleFinder';
+import { isRemoteDescriptor, SUBTITLE_EXTENSIONS } from './utils/subtitleFinder';
 
 // Subtitle extensions we globally register for click-to-open. Clicking any of
 // these opens the transcript view, which reverse-resolves the matching media
@@ -129,7 +129,8 @@ export default class MediaTranscriptPlugin extends Plugin {
   }
 
   private isSubtitle(file: TFile): boolean {
-    return SUBTITLE_EXTENSIONS.includes(file.extension.toLowerCase());
+    return !isRemoteDescriptor(file) &&
+      SUBTITLE_EXTENSIONS.includes(file.extension.toLowerCase());
   }
 
   private async openInView(file: TFile) {

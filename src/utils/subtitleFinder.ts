@@ -8,6 +8,20 @@ export interface FoundSubtitleFile {
 }
 
 export const SUBTITLE_EXTENSIONS = ['srt', 'vtt', 'json'];
+export const REMOTE_DESCRIPTOR_MARKER = 'remote';
+
+export function isRemoteDescriptor(file: TFile): boolean {
+  return file.extension.toLowerCase() === REMOTE_DESCRIPTOR_MARKER ||
+    (file.extension.toLowerCase() === 'json' &&
+      file.basename.toLowerCase().endsWith(`.${REMOTE_DESCRIPTOR_MARKER}`));
+}
+
+function remoteDescriptorNames(baseName: string): string[] {
+  return [
+    `${baseName}.${REMOTE_DESCRIPTOR_MARKER}`,
+    `${baseName}.${REMOTE_DESCRIPTOR_MARKER}.json`,
+  ];
+}
 
 // Escape special regex characters in a string
 function escapeRegex(str: string): string {
@@ -52,6 +66,7 @@ export function findSubtitleFiles(
     if (!SUBTITLE_EXTENSIONS.includes(ext)) continue;
 
     const marker = match[1] ?? '';
+    if (ext === 'json' && marker.toLowerCase() === REMOTE_DESCRIPTOR_MARKER) continue;
     results.push({ file, marker, extension: ext });
   }
 
@@ -117,6 +132,7 @@ export function findMediaForSubtitle(
   vault: Vault,
   settings: MediaTranscriptSettings,
 ): TFile | null {
+  if (isRemoteDescriptor(subtitleFile)) return null;
   const dir = subtitleFile.parent?.path ?? '';
 
   // Strip the subtitle extension, then build candidate media basenames from
@@ -160,6 +176,44 @@ export function findMediaForSubtitle(
   }
 
   return best;
+}
+
+/** Find `<media-basename>.remote[.json]` next to a local media file. */
+export function findRemoteDescriptorForMedia(mediaFile: TFile, vault: Vault): TFile | null {
+  const dir = mediaFile.parent?.path ?? '';
+  const files = vault.getFiles();
+  for (const expected of remoteDescriptorNames(mediaFile.basename)) {
+    const found = files.find(file =>
+      (file.parent?.path ?? '') === dir && file.name === expected,
+    );
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Find the remote descriptor belonging to a subtitle, trying dotted basename
+ * prefixes longest-first just like findMediaForSubtitle does.
+ */
+export function findRemoteDescriptorForSubtitle(subtitleFile: TFile, vault: Vault): TFile | null {
+  if (isRemoteDescriptor(subtitleFile)) return null;
+  const dir = subtitleFile.parent?.path ?? '';
+  const withoutExt = subtitleFile.name.slice(
+    0,
+    subtitleFile.name.length - subtitleFile.extension.length - 1,
+  );
+  const parts = withoutExt.split('.');
+  const files = vault.getFiles();
+
+  for (let k = parts.length; k >= 1; k--) {
+    for (const expected of remoteDescriptorNames(parts.slice(0, k).join('.'))) {
+      const found = files.find(file =>
+        (file.parent?.path ?? '') === dir && file.name === expected,
+      );
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 /**

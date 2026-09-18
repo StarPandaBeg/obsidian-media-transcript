@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { parseJSON, parseSRT, parseVTT, parseSubtitle } from '../src/utils/subtitleParser';
+import {
+  parseJSON,
+  parseSRT,
+  parseVTT,
+  parseSubtitle,
+  parseFileUrl,
+} from '../src/utils/subtitleParser';
 
 describe('parseJSON', () => {
   it('reads the Whisper / local-asr shape', () => {
@@ -64,6 +70,22 @@ describe('parseJSON', () => {
     ]));
     expect(segs).toHaveLength(1);
     expect(segs[0].index).toBe(1);
+  });
+});
+
+describe('parseFileUrl', () => {
+  it('reads and trims fileUrl from a remote descriptor', () => {
+    expect(parseFileUrl(JSON.stringify({
+      fileUrl: ' https://cdn.example.com/talk.mp4 ',
+      originalName: 'talk.mp4',
+    }))).toBe('https://cdn.example.com/talk.mp4');
+  });
+
+  it('ignores missing, empty, or non-string values', () => {
+    expect(parseFileUrl('{}')).toBeNull();
+    expect(parseFileUrl('{"fileUrl":"   "}')).toBeNull();
+    expect(parseFileUrl('{"fileUrl":42}')).toBeNull();
+    expect(parseFileUrl('not json')).toBeNull();
   });
 });
 

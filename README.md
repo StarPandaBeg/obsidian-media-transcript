@@ -61,8 +61,25 @@ Place `<media-name>.<marker>.{json,srt,vtt}` next to the media, e.g. `lecture.mp
 `lecture.whisper.json`. JSON follows the Whisper `verbose_json` shape:
 
 ```json
-{ "segments": [ { "start": 0.0, "end": 4.2, "text": "…", "speaker": 0 } ] }
+{
+  "segments": [ { "start": 0.0, "end": 4.2, "text": "…", "speaker": 0 } ]
+}
 ```
+
+For remote media, place a separate `<media-name>.remote` file in the same folder
+(`.remote.json` is also supported). Its contents are JSON:
+
+```json
+{
+  "fileUrl": "https://cdn.example.com/video.mp4",
+  "originalName": "video.mp4"
+}
+```
+
+The player uses `fileUrl` instead of a local media file. `originalName` is optional
+metadata; matching is based on the descriptor filename. For example,
+`lecture.whisper.json` finds `lecture.remote` or `lecture.remote.json` even when
+`lecture.mp4` is absent.
 
 ## Settings
 
