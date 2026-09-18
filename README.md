@@ -87,6 +87,7 @@ metadata; matching is based on the descriptor filename. For example,
 - **Subtitle priority** — order of filename `[marker]` tags when several subtitles exist.
 - **Video pane width** — how much width the player takes in video mode (dragging the divider
   updates it too).
+- **Transcript position** — show the transcript to the right of the video or below it.
 - **Transcript font size** — text size in px; the toolbar's `A−` / `A+` change the same value.
 - **Auto-scroll transcript** — keep the playing line centered while playing (on by default).
 - **Play videos as audio only** — same as the toolbar's `🎧` button, as a default for new views.

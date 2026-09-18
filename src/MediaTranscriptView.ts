@@ -199,10 +199,12 @@ export class MediaTranscriptView extends FileView {
     let transcriptSide: HTMLElement;
     if (showVideo) {
       const root = this.contentEl.createDiv('mt-root');
+      const transcriptBelow = this.plugin.settings.transcriptPosition === 'bottom';
+      root.toggleClass('mt-layout-bottom', transcriptBelow);
       const playerSide = root.createDiv('mt-player-side');
       const pct = this.plugin.settings.playerWidthPercent ?? 75;
       playerSide.setCssProps({ '--mt-player-width': `${pct}%` });
-      this.buildDivider(root, playerSide);
+      if (!transcriptBelow) this.buildDivider(root, playerSide);
       transcriptSide = reused ?? root.createDiv('mt-transcript-side');
       if (reused) root.appendChild(reused);
       this.buildVideoPlayer(playerSide, mediaFile);
@@ -235,6 +237,11 @@ export class MediaTranscriptView extends FileView {
   /** Re-sync this view with settings.videoAudioOnly (used by the settings tab). */
   async applyAudioOnly() {
     if (this.isVideo) await this.rebuildPlayer();
+  }
+
+  /** Rebuild an open video view after changing right/bottom transcript layout. */
+  async applyTranscriptPosition() {
+    if (this.isVideo && !this.plugin.settings.videoAudioOnly) await this.rebuildPlayer();
   }
 
   private async rebuildPlayer() {

@@ -12,6 +12,8 @@ export interface SubtitlePriority {
   label: string;
 }
 
+export type TranscriptPosition = 'right' | 'bottom';
+
 export interface MediaTranscriptSettings {
   // ── Subtitle matching ────────────────────────────────────────────────────
   subtitleDirectory: string;
@@ -23,6 +25,7 @@ export interface MediaTranscriptSettings {
 
   // ── Layout ───────────────────────────────────────────────────────────────
   playerWidthPercent: number; // video: left player width (%), remembered after dragging the divider
+  transcriptPosition: TranscriptPosition;
   transcriptFontSize: number; // transcript text size in px (A−/A+ buttons update this too)
 
   // ── Playback ─────────────────────────────────────────────────────────────
@@ -36,6 +39,7 @@ export const DEFAULT_SETTINGS: MediaTranscriptSettings = {
   supportedVideoExtensions: ['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v'],
   supportedAudioExtensions: ['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac', 'opus'],
   playerWidthPercent: 75,
+  transcriptPosition: 'right',
   transcriptFontSize: 15,
   autoScroll: true,
   videoAudioOnly: false,
@@ -87,9 +91,28 @@ export class MediaTranscriptSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName('Layout').setHeading();
 
     new Setting(containerEl)
+      .setName('Transcript position')
+      .setDesc('Place the transcript to the right of the video or below it.')
+      .addDropdown(dropdown =>
+        dropdown
+          .addOption('right', 'Right of video')
+          .addOption('bottom', 'Below video')
+          .setValue(this.plugin.settings.transcriptPosition)
+          .onChange(async value => {
+            this.plugin.settings.transcriptPosition = value as TranscriptPosition;
+            await this.plugin.saveSettings();
+            for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MEDIA_TRANSCRIPT)) {
+              if (leaf.view instanceof MediaTranscriptView) {
+                await leaf.view.applyTranscriptPosition();
+              }
+            }
+          }),
+      );
+
+    new Setting(containerEl)
       .setName('Video pane width')
       .setDesc(
-        'How much horizontal space the video takes in video mode (the rest goes to the transcript). ' +
+        'When the transcript is on the right, how much horizontal space the video takes. ' +
           '75% ≈ 3:1, 67% ≈ 2:1, 50% = 1:1. Dragging the divider updates this too. Audio mode is always full-width.',
       )
       .addSlider(s =>
