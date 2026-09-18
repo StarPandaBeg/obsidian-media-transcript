@@ -8,7 +8,8 @@
     "build": "tsc --noEmit --skipLibCheck && vitest run && node esbuild.config.mjs production",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "link:vault": "node scripts/link-vault.mjs"
   },
   "keywords": [],
   "author": "semsevens",

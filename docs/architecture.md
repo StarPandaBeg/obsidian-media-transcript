@@ -53,6 +53,7 @@ MediaTranscriptView.onLoadFile()
 
 - **视频**：播放器在左（填满栏宽、`max-height:75vh`、吸顶），字幕在右；中间
   `.mt-divider` 可拖动调整比例，结果存入 `settings.playerWidthPercent`（默认 75%，设置页也有滑杆）。
+  若开启底部字幕模式（`transcriptPosition: 'bottom'`），视频在上、字幕在下，中间同样带有水平 `.mt-divider` 可上下拖拽调整高度，存入 `settings.playerHeightPercent`（默认 50%）。
 - **音频**：无画面 → 顶部一条 `.mt-audio-bar`（🎵 标题 + 原生播放器 + 倍速），
   字幕占满整宽。
 - **倍速**：`0.75/1/1.25/1.5/2x`，设置 `mediaEl.playbackRate`（视频音频通用）。
@@ -60,9 +61,11 @@ MediaTranscriptView.onLoadFile()
   `settings.transcriptFontSize`，通过 `.mt-transcript` 上的 `--mt-font-size`
   行内变量生效；时间戳/说话人小块用 `em` 相对缩放。设置页滑杆改的是同一个值，
   两处都会 `applyFontSizeToOpenViews()` 实时应用到所有已打开视图。
-- **自动滚动**：`scrollActiveIntoCenter()` 把当前段滚到面板**垂直居中**
+- **自动滚动**：`scrollActiveIntoCenter()` / `scrollSegmentIntoView()`：
+  - 侧边/音频模式：把当前段滚到面板**垂直居中**；
+  - 底部字幕模式：把当前活跃段对齐到**第 1 或第 2 行**（留出上下文且下方有充足空间阅读后续字幕，避免底部面板高度有限时被裁切）。
   （用 `offsetTop`，因此 `.mt-transcript` 必须 `position: relative`；末尾
-  `padding-bottom: 40vh` 让最后几段也能居中）。用户 `wheel/touchmove` 手动滚动后
+  `padding-bottom: 40vh` 让最后几段也能正常滚动定位）。用户 `wheel/touchmove` 手动滚动后
   暂停 4s（`MANUAL_SCROLL_GRACE_MS`），点击段落立即恢复；可用
   `settings.autoScroll` 整体关闭（关闭后仍高亮）。
 - **搜索**：工具栏下面一行 `.mt-searchbar`（输入框 + `n/m` 计数 + ↑/↓）。

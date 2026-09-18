@@ -71,12 +71,12 @@ For remote media, place a separate `<media-name>.remote` file in the same folder
 
 ```json
 {
-  "fileUrl": "https://cdn.example.com/video.mp4",
+  "publicUrl": "https://cdn.example.com/video.mp4",
   "originalName": "video.mp4"
 }
 ```
 
-The player uses `fileUrl` instead of a local media file. `originalName` is optional
+The player uses `publicUrl` instead of a local media file. `originalName` is optional
 metadata; matching is based on the descriptor filename. For example,
 `lecture.whisper.json` finds `lecture.remote` or `lecture.remote.json` even when
 `lecture.mp4` is absent.
@@ -86,6 +86,8 @@ metadata; matching is based on the descriptor filename. For example,
 - **Subtitle folder** — leave empty to use each media file's own folder.
 - **Subtitle priority** — order of filename `[marker]` tags when several subtitles exist.
 - **Video pane width** — how much width the player takes in video mode (dragging the divider
+  updates it too).
+- **Video pane height** — how much height the player takes in bottom layout (dragging the divider
   updates it too).
 - **Transcript position** — show the transcript to the right of the video or below it.
 - **Transcript font size** — text size in px; the toolbar's `A−` / `A+` change the same value.

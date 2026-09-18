@@ -4,7 +4,7 @@ import {
   parseSRT,
   parseVTT,
   parseSubtitle,
-  parseFileUrl,
+  parsepublicUrl,
 } from '../src/utils/subtitleParser';
 
 describe('parseJSON', () => {
@@ -73,19 +73,19 @@ describe('parseJSON', () => {
   });
 });
 
-describe('parseFileUrl', () => {
-  it('reads and trims fileUrl from a remote descriptor', () => {
-    expect(parseFileUrl(JSON.stringify({
-      fileUrl: ' https://cdn.example.com/talk.mp4 ',
+describe('parsepublicUrl', () => {
+  it('reads and trims publicUrl from a remote descriptor', () => {
+    expect(parsepublicUrl(JSON.stringify({
+      publicUrl: ' https://cdn.example.com/talk.mp4 ',
       originalName: 'talk.mp4',
     }))).toBe('https://cdn.example.com/talk.mp4');
   });
 
   it('ignores missing, empty, or non-string values', () => {
-    expect(parseFileUrl('{}')).toBeNull();
-    expect(parseFileUrl('{"fileUrl":"   "}')).toBeNull();
-    expect(parseFileUrl('{"fileUrl":42}')).toBeNull();
-    expect(parseFileUrl('not json')).toBeNull();
+    expect(parsepublicUrl('{}')).toBeNull();
+    expect(parsepublicUrl('{"publicUrl":"   "}')).toBeNull();
+    expect(parsepublicUrl('{"publicUrl":42}')).toBeNull();
+    expect(parsepublicUrl('not json')).toBeNull();
   });
 });
 

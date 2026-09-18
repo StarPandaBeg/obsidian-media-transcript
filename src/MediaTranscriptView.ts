@@ -11,7 +11,7 @@ import {
 } from './utils/subtitleFinder';
 import {
   parseSubtitle,
-  parseFileUrl,
+  parsepublicUrl,
   SubtitleSegment,
   formatTime,
 } from './utils/subtitleParser';
@@ -48,7 +48,7 @@ export class MediaTranscriptView extends FileView {
   // Kept separately because a remote descriptor may override the local media,
   // or replace it entirely when a transcript is opened on its own.
   private localMediaFile: TFile | null = null;
-  private remoteFileUrl: string | null = null;
+  private remotepublicUrl: string | null = null;
   private standaloneTrack: FoundSubtitleFile | null = null;
   // When opened via a subtitle file, the track to auto-select instead of the
   // priority-sorted default (null otherwise).
@@ -91,7 +91,7 @@ export class MediaTranscriptView extends FileView {
     this.preferredTrackPath = null;
     this.transcriptSideEl = null;
     this.localMediaFile = null;
-    this.remoteFileUrl = null;
+    this.remotepublicUrl = null;
     this.standaloneTrack = null;
 
     // If a subtitle file was opened directly, resolve the media it belongs to
@@ -101,13 +101,13 @@ export class MediaTranscriptView extends FileView {
       const resolved = findMediaForSubtitle(file, this.app.vault, this.plugin.settings);
       if (!resolved) {
         const descriptor = findRemoteDescriptorForSubtitle(file, this.app.vault);
-        const fileUrl = descriptor ? await this.readRemoteFileUrl(descriptor) : null;
+        const publicUrl = descriptor ? await this.readRemotepublicUrl(descriptor) : null;
 
         // A matching remote descriptor lets a transcript play without a
         // same-named local media file.
-        if (fileUrl) {
+        if (publicUrl) {
           this.mediaFile = file;
-          this.remoteFileUrl = fileUrl;
+          this.remotepublicUrl = publicUrl;
           this.isVideo = true;
           this.preferredTrackPath = file.path;
           this.standaloneTrack = {
@@ -141,7 +141,7 @@ export class MediaTranscriptView extends FileView {
     this.localMediaFile = mediaFile;
 
     const descriptor = findRemoteDescriptorForMedia(mediaFile, this.app.vault);
-    this.remoteFileUrl = descriptor ? await this.readRemoteFileUrl(descriptor) : null;
+    this.remotepublicUrl = descriptor ? await this.readRemotepublicUrl(descriptor) : null;
 
     this.isVideo = this.plugin.settings.supportedVideoExtensions.includes(
       mediaFile.extension.toLowerCase(),
@@ -150,9 +150,9 @@ export class MediaTranscriptView extends FileView {
     await this.buildLayout();
   }
 
-  private async readRemoteFileUrl(file: TFile): Promise<string | null> {
+  private async readRemotepublicUrl(file: TFile): Promise<string | null> {
     try {
-      return parseFileUrl(await this.app.vault.read(file));
+      return parsepublicUrl(await this.app.vault.read(file));
     } catch {
       return null;
     }
@@ -199,12 +199,16 @@ export class MediaTranscriptView extends FileView {
     let transcriptSide: HTMLElement;
     if (showVideo) {
       const root = this.contentEl.createDiv('mt-root');
-      const transcriptBelow = this.plugin.settings.transcriptPosition === 'bottom';
+      const transcriptBelow = this.isBottomLayout();
       root.toggleClass('mt-layout-bottom', transcriptBelow);
       const playerSide = root.createDiv('mt-player-side');
-      const pct = this.plugin.settings.playerWidthPercent ?? 75;
-      playerSide.setCssProps({ '--mt-player-width': `${pct}%` });
-      if (!transcriptBelow) this.buildDivider(root, playerSide);
+      const widthPct = this.plugin.settings.playerWidthPercent ?? 75;
+      const heightPct = this.plugin.settings.playerHeightPercent ?? 50;
+      playerSide.setCssProps({
+        '--mt-player-width': `${widthPct}%`,
+        '--mt-player-height': `${heightPct}%`,
+      });
+      this.buildDivider(root, playerSide, transcriptBelow);
       transcriptSide = reused ?? root.createDiv('mt-transcript-side');
       if (reused) root.appendChild(reused);
       this.buildVideoPlayer(playerSide, mediaFile);
@@ -289,6 +293,22 @@ export class MediaTranscriptView extends FileView {
     }
   }
 
+  /** Apply a new player-pane height (%) to this open view, if it's in video mode with bottom transcript. */
+  applyPlayerHeight(pct: number) {
+    const playerSide = this.contentEl.querySelector('.mt-player-side');
+    if (playerSide instanceof HTMLElement) {
+      playerSide.setCssProps({ '--mt-player-height': `${pct}%` });
+    }
+  }
+
+  private isBottomLayout(): boolean {
+    return (
+      this.plugin.settings.transcriptPosition === 'bottom' &&
+      this.isVideo &&
+      !this.plugin.settings.videoAudioOnly
+    );
+  }
+
   /** Apply the transcript font size (px) to this open view. */
   applyFontSize(px: number) {
     this.transcriptEl?.setCssProps({ '--mt-font-size': `${px}px` });
@@ -337,7 +357,7 @@ export class MediaTranscriptView extends FileView {
   }
 
   private mediaSource(file: TFile): string {
-    return this.remoteFileUrl ?? this.app.vault.getResourcePath(this.localMediaFile ?? file);
+    return this.remotepublicUrl ?? this.app.vault.getResourcePath(this.localMediaFile ?? file);
   }
 
   private installMediaErrorHandler(media: HTMLVideoElement | HTMLAudioElement) {
@@ -348,9 +368,9 @@ export class MediaTranscriptView extends FileView {
       // A remote descriptor is an override, not a reason to make an existing
       // local file unusable. If the URL cannot be loaded or decoded, retry the
       // same player with the local vault resource.
-      if (this.remoteFileUrl && this.localMediaFile) {
+      if (this.remotepublicUrl && this.localMediaFile) {
         const localSource = this.app.vault.getResourcePath(this.localMediaFile);
-        this.remoteFileUrl = null;
+        this.remotepublicUrl = null;
         new Notice('Remote media could not be played — using the local file.');
         media.src = localSource;
         media.load();
@@ -382,27 +402,43 @@ export class MediaTranscriptView extends FileView {
   }
 
   // Draggable divider between the video player and the transcript.
-  private buildDivider(root: HTMLElement, playerSide: HTMLElement) {
+  private buildDivider(root: HTMLElement, playerSide: HTMLElement, isBottom: boolean) {
     const divider = root.createDiv('mt-divider');
+    if (isBottom) divider.addClass('mt-divider-bottom');
     let dragging = false;
     let pending = -1;
 
     const onMove = (e: MouseEvent) => {
       if (!dragging) return;
       const rect = root.getBoundingClientRect();
-      let pct = ((e.clientX - rect.left) / rect.width) * 100;
-      pct = Math.max(20, Math.min(75, pct));
-      pending = pct;
-      playerSide.setCssProps({ '--mt-player-width': `${pct}%` });
+      if (isBottom) {
+        if (rect.height <= 0) return;
+        let pct = ((e.clientY - rect.top) / rect.height) * 100;
+        pct = Math.max(20, Math.min(80, pct));
+        pending = pct;
+        playerSide.setCssProps({ '--mt-player-height': `${pct}%` });
+      } else {
+        if (rect.width <= 0) return;
+        let pct = ((e.clientX - rect.left) / rect.width) * 100;
+        pct = Math.max(20, Math.min(75, pct));
+        pending = pct;
+        playerSide.setCssProps({ '--mt-player-width': `${pct}%` });
+      }
     };
     const onUp = () => {
       if (!dragging) return;
       dragging = false;
       document.body.removeClass('mt-resizing');
+      document.body.removeClass('mt-resizing-col');
+      document.body.removeClass('mt-resizing-row');
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       if (pending >= 0) {
-        this.plugin.settings.playerWidthPercent = Math.round(pending);
+        if (isBottom) {
+          this.plugin.settings.playerHeightPercent = Math.round(pending);
+        } else {
+          this.plugin.settings.playerWidthPercent = Math.round(pending);
+        }
         void this.plugin.saveSettings();
       }
     };
@@ -410,6 +446,7 @@ export class MediaTranscriptView extends FileView {
       e.preventDefault();
       dragging = true;
       document.body.addClass('mt-resizing');
+      document.body.addClass(isBottom ? 'mt-resizing-row' : 'mt-resizing-col');
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     });
@@ -865,26 +902,50 @@ export class MediaTranscriptView extends FileView {
   }
 
   /**
-   * Scroll the transcript so the active segment sits vertically centered
-   * (instead of only scrolling once it reaches the bottom edge). Positions are
-   * taken from `offsetTop`, which is relative to `.mt-transcript` because that
-   * element is `position: relative` in styles.css.
+   * Scroll the transcript to display a segment.
+   * - In right/side video layout or audio mode, it centers the segment vertically.
+   * - In bottom layout, it positions the active line as the 1st or 2nd segment from the top
+   *   so it never overflows and leaves room below to read upcoming lines.
    */
-  private scrollActiveIntoCenter(smooth: boolean) {
-    const el = this.segmentEls[this.activeIndex];
-    if (el) this.scrollElIntoCenter(el, smooth);
-  }
-
-  private scrollElIntoCenter(el: HTMLElement, smooth: boolean) {
+  private scrollSegmentIntoView(el: HTMLElement, index: number, smooth: boolean) {
     const container = this.transcriptEl;
     if (!container) return;
 
-    const target = el.offsetTop - (container.clientHeight - el.offsetHeight) / 2;
-    const max = container.scrollHeight - container.clientHeight;
+    let target: number;
+    if (this.isBottomLayout()) {
+      const topPadding = 8;
+      target = Math.max(0, el.offsetTop - topPadding);
+
+      if (index > 0) {
+        const prevEl = this.segmentEls[index - 1];
+        if (prevEl) {
+          const targetWithPrev = Math.max(0, prevEl.offsetTop - topPadding);
+          // Only show previous line above if the target element still fits within the visible container
+          const elBottom = el.offsetTop + el.offsetHeight - targetWithPrev;
+          if (elBottom <= container.clientHeight) {
+            target = targetWithPrev;
+          }
+        }
+      }
+    } else {
+      target = el.offsetTop - (container.clientHeight - el.offsetHeight) / 2;
+    }
+
+    const max = Math.max(0, container.scrollHeight - container.clientHeight);
     container.scrollTo({
       top: Math.max(0, Math.min(max, target)),
       behavior: smooth ? 'smooth' : 'auto',
     });
+  }
+
+  private scrollActiveIntoCenter(smooth: boolean) {
+    const el = this.segmentEls[this.activeIndex];
+    if (el) this.scrollSegmentIntoView(el, this.activeIndex, smooth);
+  }
+
+  private scrollElIntoCenter(el: HTMLElement, smooth: boolean) {
+    const idx = this.segmentEls.indexOf(el);
+    this.scrollSegmentIntoView(el, idx, smooth);
   }
 
   // ─── Export ───────────────────────────────────────────────────────────────

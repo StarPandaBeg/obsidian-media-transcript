@@ -25,6 +25,7 @@ export interface MediaTranscriptSettings {
 
   // ── Layout ───────────────────────────────────────────────────────────────
   playerWidthPercent: number; // video: left player width (%), remembered after dragging the divider
+  playerHeightPercent: number; // video: top player height (%), remembered after dragging the divider in bottom layout
   transcriptPosition: TranscriptPosition;
   transcriptFontSize: number; // transcript text size in px (A−/A+ buttons update this too)
 
@@ -35,10 +36,14 @@ export interface MediaTranscriptSettings {
 
 export const DEFAULT_SETTINGS: MediaTranscriptSettings = {
   subtitleDirectory: '',
-  priorities: [{ marker: '', label: 'Default (no marker)' }],
+  priorities: [
+    { marker: 'whisper', label: 'Whisper transcription' },
+    { marker: 'manual', label: 'Manual subtitle' },
+  ],
   supportedVideoExtensions: ['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v'],
   supportedAudioExtensions: ['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac', 'opus'],
   playerWidthPercent: 75,
+  playerHeightPercent: 50,
   transcriptPosition: 'right',
   transcriptFontSize: 15,
   autoScroll: true,
@@ -125,6 +130,26 @@ export class MediaTranscriptSettingTab extends PluginSettingTab {
             // Live-apply to any open video views.
             for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MEDIA_TRANSCRIPT)) {
               if (leaf.view instanceof MediaTranscriptView) leaf.view.applyPlayerWidth(v);
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Video pane height')
+      .setDesc(
+        'When the transcript is below the video, how much vertical space the video takes. ' +
+          'Dragging the divider updates this too.',
+      )
+      .addSlider(s =>
+        s
+          .setLimits(20, 80, 1)
+          .setValue(this.plugin.settings.playerHeightPercent ?? 50)
+          .onChange(async v => {
+            this.plugin.settings.playerHeightPercent = v;
+            await this.plugin.saveSettings();
+            // Live-apply to any open video views.
+            for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MEDIA_TRANSCRIPT)) {
+              if (leaf.view instanceof MediaTranscriptView) leaf.view.applyPlayerHeight(v);
             }
           }),
       );
