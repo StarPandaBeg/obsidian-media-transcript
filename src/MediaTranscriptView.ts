@@ -1,4 +1,4 @@
-import { FileView, WorkspaceLeaf, TFile, Notice, Menu } from 'obsidian';
+import { FileView, WorkspaceLeaf, TFile, Notice, Menu, setIcon } from 'obsidian';
 import type MediaTranscriptPlugin from './main';
 import {
   findSubtitleFiles,
@@ -64,6 +64,7 @@ export class MediaTranscriptView extends FileView {
   // video and audio-only doesn't re-parse or re-render the subtitle.
   private transcriptSideEl: HTMLElement | null = null;
   private audioOnlyBtn: HTMLElement | null = null;
+  private remoteIconEl: HTMLElement | null = null;
 
   // ── Search state ──────────────────────────────────────────────────────────
   private txtEls: HTMLElement[] = [];        // the .mt-txt of each segment
@@ -93,6 +94,7 @@ export class MediaTranscriptView extends FileView {
     this.transcriptSideEl = null;
     this.localMediaFile = null;
     this.remotepublicUrl = null;
+    this.remoteIconEl = null;
     this.standaloneTrack = null;
 
     // If a subtitle file was opened directly, resolve the media it belongs to
@@ -388,6 +390,8 @@ export class MediaTranscriptView extends FileView {
       if (this.remotepublicUrl && this.localMediaFile) {
         const localSource = this.app.vault.getResourcePath(this.localMediaFile);
         this.remotepublicUrl = null;
+        this.remoteIconEl?.remove();
+        this.remoteIconEl = null;
         new Notice('Remote media could not be played — using the local file.');
         media.src = localSource;
         media.load();
@@ -517,6 +521,23 @@ export class MediaTranscriptView extends FileView {
   private buildToolbar(toolbar: HTMLElement, file: TFile) {
     // Subtitle source selector
     const selectWrap = toolbar.createDiv('mt-select-wrap');
+    if (this.remotepublicUrl) {
+      const icon = selectWrap.createSpan({
+        cls: 'mt-remote-icon',
+        attr: {
+          title: `Remote media: ${this.remotepublicUrl}\n(click to copy URL)`,
+        },
+      });
+      setIcon(icon, 'globe');
+      icon.addEventListener('click', e => {
+        e.stopPropagation();
+        if (this.remotepublicUrl) {
+          void navigator.clipboard.writeText(this.remotepublicUrl);
+          new Notice('Remote media URL copied to clipboard');
+        }
+      });
+      this.remoteIconEl = icon;
+    }
     selectWrap.createEl('label', { text: 'Subtitle:', cls: 'mt-label' });
     this.trackSelect = selectWrap.createEl('select', { cls: 'mt-select' });
     this.trackSelect.addEventListener('change', () => {

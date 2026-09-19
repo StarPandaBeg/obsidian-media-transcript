@@ -247,6 +247,28 @@ video.mt-media {
   flex: 1;
 }
 
+.mt-remote-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-accent);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: opacity 0.1s, background-color 0.1s;
+}
+
+.mt-remote-icon:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-accent-hover);
+}
+
+.mt-remote-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
 .mt-label {
   font-size: 0.78em;
   color: var(--text-muted);
