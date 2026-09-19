@@ -179,7 +179,12 @@ export function findMediaForSubtitle(
 }
 
 /** Find `<media-basename>.remote[.json]` next to a local media file. */
-export function findRemoteDescriptorForMedia(mediaFile: TFile, vault: Vault): TFile | null {
+export function findRemoteDescriptorForMedia(
+  mediaFile: TFile,
+  vault: Vault,
+  settings?: MediaTranscriptSettings,
+): TFile | null {
+  if (settings && settings.enableRemoteMedia === false) return null;
   const dir = mediaFile.parent?.path ?? '';
   const files = vault.getFiles();
   const names = mediaFile.name !== mediaFile.basename
@@ -206,6 +211,7 @@ export function findRemoteDescriptorForSubtitle(
   vault: Vault,
   settings?: MediaTranscriptSettings,
 ): TFile | null {
+  if (settings && settings.enableRemoteMedia === false) return null;
   if (isRemoteDescriptor(subtitleFile)) return null;
   const dir = subtitleFile.parent?.path ?? '';
   const withoutExt = subtitleFile.name.slice(

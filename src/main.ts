@@ -58,7 +58,7 @@ export default class MediaTranscriptPlugin extends Plugin {
       this.app.workspace.on('file-menu', (menu, file) => {
         if (
           file instanceof TFile &&
-          (this.isMedia(file) || this.isSubtitle(file) || isRemoteDescriptor(file))
+          (this.isMedia(file) || this.isSubtitle(file) || this.isRemote(file))
         ) {
           menu.addItem(item =>
             item
@@ -77,7 +77,7 @@ export default class MediaTranscriptPlugin extends Plugin {
         const file = this.app.workspace.getActiveFile();
         if (
           !(file instanceof TFile) ||
-          (!this.isMedia(file) && !this.isSubtitle(file) && !isRemoteDescriptor(file))
+          (!this.isMedia(file) && !this.isSubtitle(file) && !this.isRemote(file))
         ) {
           return false;
         }
@@ -137,6 +137,10 @@ export default class MediaTranscriptPlugin extends Plugin {
   private isSubtitle(file: TFile): boolean {
     return !isRemoteDescriptor(file) &&
       SUBTITLE_EXTENSIONS.includes(file.extension.toLowerCase());
+  }
+
+  private isRemote(file: TFile): boolean {
+    return Boolean(this.settings.enableRemoteMedia) && isRemoteDescriptor(file);
   }
 
   private async openInView(file: TFile) {

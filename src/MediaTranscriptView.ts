@@ -100,6 +100,14 @@ export class MediaTranscriptView extends FileView {
 
     // Direct opening of a remote media descriptor file
     if (isRemoteDescriptor(file)) {
+      if (!this.plugin.settings.enableRemoteMedia) {
+        this.contentEl.createDiv('mt-empty').setText(
+          'Remote media support is disabled in settings.\n' +
+            'Enable it in Media Transcript settings to play .remote files.',
+        );
+        return;
+      }
+
       const remoteResult = await resolveRemoteMediaUrl(this.app, file);
       if ('error' in remoteResult) {
         new Notice(remoteResult.error, 8000);
@@ -191,7 +199,7 @@ export class MediaTranscriptView extends FileView {
     this.mediaFile = mediaFile;
     this.localMediaFile = mediaFile;
 
-    const descriptor = findRemoteDescriptorForMedia(mediaFile, this.app.vault);
+    const descriptor = findRemoteDescriptorForMedia(mediaFile, this.app.vault, this.plugin.settings);
     if (descriptor) {
       const remoteResult = await resolveRemoteMediaUrl(this.app, descriptor);
       if ('url' in remoteResult) {

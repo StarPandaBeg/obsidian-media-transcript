@@ -29,6 +29,9 @@ export interface MediaTranscriptSettings {
   transcriptPosition: TranscriptPosition;
   transcriptFontSize: number; // transcript text size in px (A−/A+ buttons update this too)
 
+  // ── Remote media ──────────────────────────────────────────────────────────
+  enableRemoteMedia: boolean;
+
   // ── Playback ─────────────────────────────────────────────────────────────
   autoScroll: boolean;      // keep the playing line centered in the transcript
   videoAudioOnly: boolean;  // play videos without showing the picture
@@ -46,6 +49,7 @@ export const DEFAULT_SETTINGS: MediaTranscriptSettings = {
   playerHeightPercent: 50,
   transcriptPosition: 'right',
   transcriptFontSize: 15,
+  enableRemoteMedia: true,
   autoScroll: true,
   videoAudioOnly: false,
 };
@@ -200,6 +204,20 @@ export class MediaTranscriptSettingTab extends PluginSettingTab {
           for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MEDIA_TRANSCRIPT)) {
             if (leaf.view instanceof MediaTranscriptView) await leaf.view.applyAudioOnly();
           }
+        }),
+      );
+    // ── Remote media ────────────────────────────────────────────────────────
+    new Setting(containerEl).setName('Remote media').setHeading();
+
+    new Setting(containerEl)
+      .setName('Enable remote media support')
+      .setDesc(
+        'Resolve and play media from .remote descriptor files via the Remote plugin.',
+      )
+      .addToggle(t =>
+        t.setValue(this.plugin.settings.enableRemoteMedia).onChange(async v => {
+          this.plugin.settings.enableRemoteMedia = v;
+          await this.plugin.saveSettings();
         }),
       );
   }

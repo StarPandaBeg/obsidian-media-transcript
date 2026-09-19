@@ -87,6 +87,7 @@ playback URLs via the Remote plugin (`api.resolve(remoteFile)`) at runtime:
 - **Transcript font size** — text size in px; the toolbar's `A−` / `A+` change the same value.
 - **Auto-scroll transcript** — keep the playing line centered while playing (on by default).
 - **Play videos as audio only** — same as the toolbar's `🎧` button, as a default for new views.
+- **Enable remote media support** — resolve and play media from `.remote` descriptor files via the Remote plugin (on by default).
 
 If a media extension is already handled by Obsidian core or another plugin, use the
 **Open in Media Transcript** file-menu item or the *Open current media file in transcript view*

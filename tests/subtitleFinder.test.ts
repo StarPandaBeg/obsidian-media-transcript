@@ -149,6 +149,26 @@ describe('remote media descriptors', () => {
       ),
     ).toBe(videoRemote);
   });
+
+  it('returns null when enableRemoteMedia is disabled in settings for subtitle search', () => {
+    const transcript = file('video.json');
+    const remote = file('video.mp4.remote');
+    const settings = {
+      enableRemoteMedia: false,
+      supportedVideoExtensions: ['mp4'],
+      supportedAudioExtensions: [],
+    } as never;
+    expect(findRemoteDescriptorForSubtitle(transcript, vaultWith(transcript, remote), settings)).toBeNull();
+  });
+
+  it('returns null when enableRemoteMedia is disabled in settings for media search', () => {
+    const media = file('video.mp4');
+    const remote = file('video.mp4.remote');
+    const settings = {
+      enableRemoteMedia: false,
+    } as never;
+    expect(findRemoteDescriptorForMedia(media, vaultWith(media, remote), settings)).toBeNull();
+  });
 });
 
 describe('remoteDescriptorBaseName', () => {
