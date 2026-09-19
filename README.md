@@ -68,12 +68,12 @@ Place `<media-name>.<marker>.{json,srt,vtt}` next to the media, e.g. `lecture.mp
 
 For remote media, place a `<media-name>.remote` file in the same folder
 (`.remote.json` is also supported). Media Transcript dynamically resolves
-playback URLs via the Remote plugin (`api.resolve(remoteFile)`) at runtime:
+playback URLs via the `Remote Archive` plugin (`api.resolve(remoteFile)`) at runtime:
 
-- If a local media file is absent, Media Transcript looks for a sibling `.remote` file and resolves its media URL through the Remote plugin.
+- If a local media file is absent, Media Transcript looks for a sibling `.remote` file and resolves its media URL through the `Remote Archive` plugin.
 - The resolved URL is fed directly into Media Transcript's own media player, preserving all transcripts, timestamps, search, hotkeys, and sync.
 - No direct parsing or dependency on the remote file's internal format is required.
-- If the Remote plugin is missing or resolution fails, a clear notification is displayed.
+- If the `Remote Archive` plugin is missing or resolution fails, a clear notification is displayed.
 
 ## Settings
 
@@ -87,7 +87,7 @@ playback URLs via the Remote plugin (`api.resolve(remoteFile)`) at runtime:
 - **Transcript font size** — text size in px; the toolbar's `A−` / `A+` change the same value.
 - **Auto-scroll transcript** — keep the playing line centered while playing (on by default).
 - **Play videos as audio only** — same as the toolbar's `🎧` button, as a default for new views.
-- **Enable remote media support** — resolve and play media from `.remote` descriptor files via the Remote plugin (on by default).
+- **Enable remote media support** — resolve and play media from `.remote` descriptor files via the `Remote Archive` plugin (on by default).
 
 If a media extension is already handled by Obsidian core or another plugin, use the
 **Open in Media Transcript** file-menu item or the *Open current media file in transcript view*

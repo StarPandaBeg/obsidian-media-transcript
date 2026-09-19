@@ -212,7 +212,7 @@ export class MediaTranscriptSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Enable remote media support')
       .setDesc(
-        'Resolve and play media from .remote descriptor files via the Remote plugin.',
+        'Resolve and play media from .remote descriptor files via the `Remote Archive` plugin.',
       )
       .addToggle(t =>
         t.setValue(this.plugin.settings.enableRemoteMedia).onChange(async v => {

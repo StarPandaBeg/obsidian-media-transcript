@@ -113,7 +113,7 @@ export class MediaTranscriptView extends FileView {
         new Notice(remoteResult.error, 8000);
         this.contentEl.createDiv('mt-empty').setText(
           remoteResult.previewDisabled
-            ? 'Remote media preview is disabled in the Remote plugin settings.\n' +
+            ? 'Media preview is disabled in the Remote Archive plugin settings.\n' +
                 'Enable preview in plugin settings to stream this file.'
             : remoteResult.error,
         );
@@ -150,7 +150,7 @@ export class MediaTranscriptView extends FileView {
             new Notice(remoteResult.error, 8000);
             this.contentEl.createDiv('mt-empty').setText(
               remoteResult.previewDisabled
-                ? 'Remote media preview is disabled in the Remote plugin settings.\n' +
+                ? 'Media preview is disabled in the Remote Archive plugin settings.\n' +
                     'Enable preview in plugin settings or place a local media file in the vault.'
                 : remoteResult.error,
             );
@@ -588,7 +588,7 @@ export class MediaTranscriptView extends FileView {
         e.stopPropagation();
         if (this.remoteMediaUrl) {
           void navigator.clipboard.writeText(this.remoteMediaUrl);
-          new Notice('Remote media URL copied to clipboard');
+          new Notice('Media URL copied to clipboard');
         }
       });
       this.remoteIconEl = icon;
