@@ -4,7 +4,7 @@
   "version": "1.3.0",
   "minAppVersion": "1.4.0",
   "description": "Play video/audio with synchronized, clickable transcripts. Click any line to seek; playing line auto-highlights.",
-  "author": "semsevens",
+  "author": "semsevens, starpandabeg",
   "authorUrl": "https://github.com/semsevens",
   "isDesktopOnly": false
 }

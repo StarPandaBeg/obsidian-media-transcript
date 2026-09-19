@@ -93,6 +93,11 @@ If a media extension is already handled by Obsidian core or another plugin, use 
 **Open in Media Transcript** file-menu item or the *Open current media file in transcript view*
 command to open it in this view.
 
+## Authors
+
+- [semsevens](https://github.com/semsevens)
+- [starpandabeg](https://github.com/starpandabeg) (co-author)
+
 ## License
 
 MIT

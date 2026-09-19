@@ -12,7 +12,10 @@
     "link:vault": "node scripts/link-vault.mjs"
   },
   "keywords": [],
-  "author": "semsevens",
+  "author": "semsevens, starpandabeg",
+  "contributors": [
+    "starpandabeg"
+  ],
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^24.0.0",
