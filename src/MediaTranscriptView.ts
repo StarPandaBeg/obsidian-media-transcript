@@ -111,7 +111,12 @@ export class MediaTranscriptView extends FileView {
       const remoteResult = await resolveRemoteMediaUrl(this.app, file);
       if ('error' in remoteResult) {
         new Notice(remoteResult.error, 8000);
-        this.contentEl.createDiv('mt-empty').setText(remoteResult.error);
+        this.contentEl.createDiv('mt-empty').setText(
+          remoteResult.previewDisabled
+            ? 'Remote media preview is disabled in the Remote plugin settings.\n' +
+                'Enable preview in plugin settings to stream this file.'
+            : remoteResult.error,
+        );
         return;
       }
 
@@ -143,7 +148,12 @@ export class MediaTranscriptView extends FileView {
           const remoteResult = await resolveRemoteMediaUrl(this.app, descriptor);
           if ('error' in remoteResult) {
             new Notice(remoteResult.error, 8000);
-            this.contentEl.createDiv('mt-empty').setText(remoteResult.error);
+            this.contentEl.createDiv('mt-empty').setText(
+              remoteResult.previewDisabled
+                ? 'Remote media preview is disabled in the Remote plugin settings.\n' +
+                    'Enable preview in plugin settings or place a local media file in the vault.'
+                : remoteResult.error,
+            );
             return;
           }
 
@@ -205,7 +215,9 @@ export class MediaTranscriptView extends FileView {
       if ('url' in remoteResult) {
         this.remoteMediaUrl = remoteResult.url;
       } else {
-        new Notice(remoteResult.error, 8000);
+        if (!remoteResult.previewDisabled) {
+          new Notice(remoteResult.error, 8000);
+        }
       }
     }
 

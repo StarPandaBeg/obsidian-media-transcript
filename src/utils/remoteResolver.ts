@@ -1,17 +1,22 @@
 import { App, TFile } from 'obsidian';
 
 export const KNOWN_REMOTE_PLUGIN_IDS = [
+  'webdav-archive',
   'remote-archive',
   'remote',
+  'obsidian-webdav-archive',
   'obsidian-remote-archive',
   'obsidian-remote',
 ];
 
+export interface WebDavArchiveApi {
+  resolve(remoteFile: TFile): Promise<{ url: string }>;
+  isPreviewEnabled(): boolean;
+}
+
 export interface RemoteArchivePlugin {
   manifest?: { id?: string; name?: string };
-  api?: {
-    resolve?: (file: TFile) => Promise<{ url?: string }>;
-  };
+  api?: WebDavArchiveApi;
 }
 
 /**
@@ -45,12 +50,30 @@ export function getRemotePlugin(app: App): RemoteArchivePlugin | null {
   return null;
 }
 
+/**
+ * Check whether remote media preview is enabled in the Remote plugin.
+ * Returns false if the plugin is not installed or enabled, or if isPreviewEnabled() returns false.
+ * Returns true if the plugin is present and isPreviewEnabled is not implemented (backwards compatibility).
+ */
+export function isRemotePreviewEnabled(app: App): boolean {
+  const remotePlugin = getRemotePlugin(app);
+  if (!remotePlugin?.api) return false;
+  if (typeof remotePlugin.api.isPreviewEnabled === 'function') {
+    try {
+      return Boolean(remotePlugin.api.isPreviewEnabled());
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 export type RemoteResolveResult =
   | { url: string }
-  | { error: string };
+  | { error: string; previewDisabled?: boolean };
 
 /**
- * Resolve a remote media descriptor file to a playback URL via the Remote Archive plugin API.
+ * Resolve a remote media descriptor file to a playback URL via the Remote plugin API.
  */
 export async function resolveRemoteMediaUrl(
   app: App,
@@ -69,6 +92,23 @@ export async function resolveRemoteMediaUrl(
     };
   }
 
+  if (typeof remotePlugin.api.isPreviewEnabled === 'function') {
+    try {
+      if (!remotePlugin.api.isPreviewEnabled()) {
+        const name = remotePlugin.manifest?.name ?? remotePlugin.manifest?.id ?? 'Remote';
+        return {
+          error: `Remote media preview is disabled in "${name}" plugin settings.`,
+          previewDisabled: true,
+        };
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        error: `Failed to check remote media preview availability: ${message}`,
+      };
+    }
+  }
+
   try {
     const result = await remotePlugin.api.resolve(remoteFile);
     const url = result?.url;
@@ -85,4 +125,3 @@ export async function resolveRemoteMediaUrl(
     };
   }
 }
-

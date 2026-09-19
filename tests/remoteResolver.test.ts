@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { resolveRemoteMediaUrl, getRemotePlugin, KNOWN_REMOTE_PLUGIN_IDS } from '../src/utils/remoteResolver';
+import {
+  resolveRemoteMediaUrl,
+  getRemotePlugin,
+  isRemotePreviewEnabled,
+  KNOWN_REMOTE_PLUGIN_IDS,
+} from '../src/utils/remoteResolver';
 import type { App, TFile } from 'obsidian';
 
 function mockFile(name: string): TFile {
@@ -128,5 +133,81 @@ describe('resolveRemoteMediaUrl', () => {
     if ('url' in result) {
       expect(result.url).toBe('https://cdn.example.com/video.mp4');
     }
+  });
+
+  it('fails with previewDisabled when isPreviewEnabled() returns false', async () => {
+    const remoteFile = mockFile('video.mp4.remote');
+    const app = {
+      plugins: {
+        getPlugin: () => ({
+          manifest: { name: 'WebDAV Archive' },
+          api: {
+            isPreviewEnabled: vi.fn().mockReturnValue(false),
+            resolve: vi.fn(),
+          },
+        }),
+      },
+    } as unknown as App;
+    const result = await resolveRemoteMediaUrl(app, remoteFile);
+    expect('error' in result).toBe(true);
+    if ('error' in result) {
+      expect(result.previewDisabled).toBe(true);
+      expect(result.error).toContain('disabled');
+      expect(result.error).toContain('WebDAV Archive');
+    }
+  });
+
+  it('succeeds when isPreviewEnabled() returns true', async () => {
+    const remoteFile = mockFile('video.mp4.remote');
+    const app = {
+      plugins: {
+        getPlugin: () => ({
+          manifest: { name: 'WebDAV Archive' },
+          api: {
+            isPreviewEnabled: vi.fn().mockReturnValue(true),
+            resolve: vi.fn().mockResolvedValue({ url: 'https://cdn.example.com/video.mp4' }),
+          },
+        }),
+      },
+    } as unknown as App;
+    const result = await resolveRemoteMediaUrl(app, remoteFile);
+    expect('url' in result).toBe(true);
+    if ('url' in result) {
+      expect(result.url).toBe('https://cdn.example.com/video.mp4');
+    }
+  });
+});
+
+describe('isRemotePreviewEnabled', () => {
+  it('returns false when Remote plugin is missing', () => {
+    const app = { plugins: { getPlugin: () => null } } as unknown as App;
+    expect(isRemotePreviewEnabled(app)).toBe(false);
+  });
+
+  it('returns true when isPreviewEnabled is not defined (backward compatibility)', () => {
+    const app = {
+      plugins: {
+        getPlugin: () => ({ api: { resolve: vi.fn() } }),
+      },
+    } as unknown as App;
+    expect(isRemotePreviewEnabled(app)).toBe(true);
+  });
+
+  it('returns true when isPreviewEnabled() returns true', () => {
+    const app = {
+      plugins: {
+        getPlugin: () => ({ api: { isPreviewEnabled: () => true } }),
+      },
+    } as unknown as App;
+    expect(isRemotePreviewEnabled(app)).toBe(true);
+  });
+
+  it('returns false when isPreviewEnabled() returns false', () => {
+    const app = {
+      plugins: {
+        getPlugin: () => ({ api: { isPreviewEnabled: () => false } }),
+      },
+    } as unknown as App;
+    expect(isRemotePreviewEnabled(app)).toBe(false);
   });
 });
