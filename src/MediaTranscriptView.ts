@@ -5,6 +5,7 @@ import {
   findMediaForSubtitle,
   findRemoteDescriptorForMedia,
   findRemoteDescriptorForSubtitle,
+  remoteDescriptorBaseName,
   resolvePriority,
   FoundSubtitleFile,
   SUBTITLE_EXTENSIONS,
@@ -100,21 +101,37 @@ export class MediaTranscriptView extends FileView {
     if (SUBTITLE_EXTENSIONS.includes(file.extension.toLowerCase())) {
       const resolved = findMediaForSubtitle(file, this.app.vault, this.plugin.settings);
       if (!resolved) {
-        const descriptor = findRemoteDescriptorForSubtitle(file, this.app.vault);
+        const descriptor = findRemoteDescriptorForSubtitle(file, this.app.vault, this.plugin.settings);
         const publicUrl = descriptor ? await this.readRemotepublicUrl(descriptor) : null;
 
         // A matching remote descriptor lets a transcript play without a
         // same-named local media file.
-        if (publicUrl) {
+        if (publicUrl && descriptor) {
           this.mediaFile = file;
           this.remotepublicUrl = publicUrl;
-          this.isVideo = true;
+          const isAudioDesc = this.plugin.settings.supportedAudioExtensions.some(ext =>
+            descriptor.name.toLowerCase().includes(`.${ext.toLowerCase()}.remote`),
+          );
+          this.isVideo = !isAudioDesc;
           this.preferredTrackPath = file.path;
-          this.standaloneTrack = {
-            file,
-            marker: '',
-            extension: file.extension.toLowerCase(),
-          };
+
+          const stem = remoteDescriptorBaseName(descriptor, this.plugin.settings);
+          const remoteMediaStub = {
+            basename: stem,
+            parent: descriptor.parent,
+          } as TFile;
+          const tracks = findSubtitleFiles(remoteMediaStub, this.app.vault, this.plugin.settings);
+
+          if (tracks.some(t => t.file.path === file.path)) {
+            this.standaloneTrack = null;
+            this.subtitleTracks = tracks;
+          } else {
+            this.standaloneTrack = {
+              file,
+              marker: '',
+              extension: file.extension.toLowerCase(),
+            };
+          }
           await this.buildLayout();
           return;
         }
@@ -476,7 +493,9 @@ export class MediaTranscriptView extends FileView {
     // Find & load subtitle files
     this.subtitleTracks = this.standaloneTrack
       ? [this.standaloneTrack]
-      : findSubtitleFiles(file, this.app.vault, this.plugin.settings);
+      : (this.subtitleTracks.length > 0
+          ? this.subtitleTracks
+          : findSubtitleFiles(file, this.app.vault, this.plugin.settings));
     const sorted = resolvePriority(this.subtitleTracks, this.plugin.settings.priorities);
     this.populateTrackSelect(sorted);
 

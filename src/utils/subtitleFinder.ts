@@ -182,7 +182,10 @@ export function findMediaForSubtitle(
 export function findRemoteDescriptorForMedia(mediaFile: TFile, vault: Vault): TFile | null {
   const dir = mediaFile.parent?.path ?? '';
   const files = vault.getFiles();
-  for (const expected of remoteDescriptorNames(mediaFile.basename)) {
+  const names = mediaFile.name !== mediaFile.basename
+    ? [...remoteDescriptorNames(mediaFile.name), ...remoteDescriptorNames(mediaFile.basename)]
+    : remoteDescriptorNames(mediaFile.basename);
+  for (const expected of names) {
     const found = files.find(file =>
       (file.parent?.path ?? '') === dir && file.name === expected,
     );
@@ -194,8 +197,15 @@ export function findRemoteDescriptorForMedia(mediaFile: TFile, vault: Vault): TF
 /**
  * Find the remote descriptor belonging to a subtitle, trying dotted basename
  * prefixes longest-first just like findMediaForSubtitle does.
+ *
+ * Checks exact descriptor names as well as descriptors with media extensions
+ * (e.g. "video.json" finds "video.mp4.remote", "video.remote", etc.).
  */
-export function findRemoteDescriptorForSubtitle(subtitleFile: TFile, vault: Vault): TFile | null {
+export function findRemoteDescriptorForSubtitle(
+  subtitleFile: TFile,
+  vault: Vault,
+  settings?: MediaTranscriptSettings,
+): TFile | null {
   if (isRemoteDescriptor(subtitleFile)) return null;
   const dir = subtitleFile.parent?.path ?? '';
   const withoutExt = subtitleFile.name.slice(
@@ -205,15 +215,91 @@ export function findRemoteDescriptorForSubtitle(subtitleFile: TFile, vault: Vaul
   const parts = withoutExt.split('.');
   const files = vault.getFiles();
 
+  const videoExts = (settings?.supportedVideoExtensions ?? [
+    'mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v',
+  ]).map(e => e.toLowerCase());
+
+  const audioExts = (settings?.supportedAudioExtensions ?? [
+    'mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac', 'opus',
+  ]).map(e => e.toLowerCase());
+
   for (let k = parts.length; k >= 1; k--) {
-    for (const expected of remoteDescriptorNames(parts.slice(0, k).join('.'))) {
+    const candidate = parts.slice(0, k).join('.');
+
+    // 1. Direct candidate match (e.g. "video.mp4.remote" if candidate is "video.mp4",
+    //    or "video.remote" if candidate is "video"):
+    for (const expected of remoteDescriptorNames(candidate)) {
       const found = files.find(file =>
         (file.parent?.path ?? '') === dir && file.name === expected,
       );
       if (found) return found;
     }
+
+    // 2. Candidate + video extensions (e.g. "video" -> "video.mp4.remote"):
+    for (const ve of videoExts) {
+      for (const expected of remoteDescriptorNames(`${candidate}.${ve}`)) {
+        const found = files.find(file =>
+          (file.parent?.path ?? '') === dir && file.name === expected,
+        );
+        if (found) return found;
+      }
+    }
+
+    // 3. Candidate + audio extensions (e.g. "video" -> "video.mp3.remote"):
+    for (const ae of audioExts) {
+      for (const expected of remoteDescriptorNames(`${candidate}.${ae}`)) {
+        const found = files.find(file =>
+          (file.parent?.path ?? '') === dir && file.name === expected,
+        );
+        if (found) return found;
+      }
+    }
+
+    // 4. Any other remote descriptor starting with `${candidate}.`:
+    const pattern = new RegExp(
+      `^${escapeRegex(candidate)}\\.[^.]+\\.${REMOTE_DESCRIPTOR_MARKER}(?:\\.json)?$`,
+      'i',
+    );
+    const matchedFiles = files.filter(file =>
+      (file.parent?.path ?? '') === dir && pattern.test(file.name),
+    );
+    if (matchedFiles.length > 0) {
+      const dotRemote = matchedFiles.find(
+        f => f.extension.toLowerCase() === REMOTE_DESCRIPTOR_MARKER,
+      );
+      return dotRemote ?? matchedFiles[0];
+    }
   }
   return null;
+}
+
+/** Extract the media stem from a remote descriptor filename (e.g. "video.mp4.remote" -> "video"). */
+export function remoteDescriptorBaseName(
+  descriptor: TFile,
+  settings?: MediaTranscriptSettings,
+): string {
+  let name = descriptor.name;
+  if (name.toLowerCase().endsWith('.json')) {
+    name = name.slice(0, -5);
+  }
+  if (name.toLowerCase().endsWith(`.${REMOTE_DESCRIPTOR_MARKER}`)) {
+    name = name.slice(0, -REMOTE_DESCRIPTOR_MARKER.length - 1);
+  }
+  const videoExts = (settings?.supportedVideoExtensions ?? [
+    'mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v',
+  ]).map(e => e.toLowerCase());
+  const audioExts = (settings?.supportedAudioExtensions ?? [
+    'mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac', 'opus',
+  ]).map(e => e.toLowerCase());
+
+  const dot = name.lastIndexOf('.');
+  if (dot > 0) {
+    const ext = name.slice(dot + 1).toLowerCase();
+    if (videoExts.includes(ext) || audioExts.includes(ext)) {
+      return name.slice(0, dot);
+    }
+  }
+  return name;
 }
 
 /**

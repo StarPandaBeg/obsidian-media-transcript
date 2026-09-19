@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   findRemoteDescriptorForMedia,
   findRemoteDescriptorForSubtitle,
+  remoteDescriptorBaseName,
   findSubtitleFiles,
   resolvePriority,
   type FoundSubtitleFile,
@@ -105,5 +106,65 @@ describe('remote media descriptors', () => {
     } as never;
     const found = findSubtitleFiles(media, vaultWith(media, transcript, remote), settings);
     expect(found.map(track => track.file.name)).toEqual(['lecture.whisper.json']);
+  });
+
+  it('finds video.mp4.remote when transcript is video.json', () => {
+    const transcript = file('video.json');
+    const remote = file('video.mp4.remote');
+    expect(findRemoteDescriptorForSubtitle(transcript, vaultWith(transcript, remote))).toBe(remote);
+  });
+
+  it('finds video.mp4.remote.json when transcript is video.json', () => {
+    const transcript = file('video.json');
+    const remote = file('video.mp4.remote.json');
+    expect(findRemoteDescriptorForSubtitle(transcript, vaultWith(transcript, remote))).toBe(remote);
+  });
+
+  it('finds video.mp4.remote when transcript is video.mp4.json', () => {
+    const transcript = file('video.mp4.json');
+    const remote = file('video.mp4.remote');
+    expect(findRemoteDescriptorForSubtitle(transcript, vaultWith(transcript, remote))).toBe(remote);
+  });
+
+  it('finds video.mp4.remote when transcript is video.whisper.json', () => {
+    const transcript = file('video.whisper.json');
+    const remote = file('video.mp4.remote');
+    expect(findRemoteDescriptorForSubtitle(transcript, vaultWith(transcript, remote))).toBe(remote);
+  });
+
+  it('finds video.mp4.remote next to local media video.mp4', () => {
+    const media = file('video.mp4');
+    const remote = file('video.mp4.remote');
+    expect(findRemoteDescriptorForMedia(media, vaultWith(media, remote))).toBe(remote);
+  });
+
+  it('prefers video descriptor over audio descriptor for video.json', () => {
+    const transcript = file('video.json');
+    const audioRemote = file('video.mp3.remote');
+    const videoRemote = file('video.mp4.remote');
+    expect(
+      findRemoteDescriptorForSubtitle(
+        transcript,
+        vaultWith(transcript, audioRemote, videoRemote),
+      ),
+    ).toBe(videoRemote);
+  });
+});
+
+describe('remoteDescriptorBaseName', () => {
+  it('extracts base name from video.mp4.remote', () => {
+    expect(remoteDescriptorBaseName(file('video.mp4.remote'))).toBe('video');
+  });
+
+  it('extracts base name from video.mp4.remote.json', () => {
+    expect(remoteDescriptorBaseName(file('video.mp4.remote.json'))).toBe('video');
+  });
+
+  it('extracts base name from video.remote', () => {
+    expect(remoteDescriptorBaseName(file('video.remote'))).toBe('video');
+  });
+
+  it('extracts base name from video.remote.json', () => {
+    expect(remoteDescriptorBaseName(file('video.remote.json'))).toBe('video');
   });
 });
