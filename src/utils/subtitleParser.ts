@@ -167,22 +167,6 @@ export function parseJSON(content: string): SubtitleSegment[] {
   return [];
 }
 
-/** Return the remote media source declared by a `.remote[.json]` descriptor. */
-export function parsepublicUrl(content: string): string | null {
-  let data: unknown;
-  try {
-    data = JSON.parse(content);
-  } catch {
-    return null;
-  }
-
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-  const publicUrl = (data as { publicUrl?: unknown }).publicUrl;
-  return typeof publicUrl === 'string' && publicUrl.trim().length > 0
-    ? publicUrl.trim()
-    : null;
-}
-
 export function parseSubtitle(content: string, extension: string): SubtitleSegment[] {
   switch (extension.toLowerCase()) {
     case 'srt':  return parseSRT(content);

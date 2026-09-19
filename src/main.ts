@@ -56,7 +56,10 @@ export default class MediaTranscriptPlugin extends Plugin {
     // media files and subtitle files (which resolve to their media).
     this.registerEvent(
       this.app.workspace.on('file-menu', (menu, file) => {
-        if (file instanceof TFile && (this.isMedia(file) || this.isSubtitle(file))) {
+        if (
+          file instanceof TFile &&
+          (this.isMedia(file) || this.isSubtitle(file) || isRemoteDescriptor(file))
+        ) {
           menu.addItem(item =>
             item
               .setTitle('Open in Media Transcript')
@@ -72,7 +75,10 @@ export default class MediaTranscriptPlugin extends Plugin {
       name: 'Open current media file in transcript view',
       checkCallback: (checking: boolean) => {
         const file = this.app.workspace.getActiveFile();
-        if (!(file instanceof TFile) || (!this.isMedia(file) && !this.isSubtitle(file))) {
+        if (
+          !(file instanceof TFile) ||
+          (!this.isMedia(file) && !this.isSubtitle(file) && !isRemoteDescriptor(file))
+        ) {
           return false;
         }
         if (!checking) void this.openInView(file);

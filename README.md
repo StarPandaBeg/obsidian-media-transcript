@@ -66,20 +66,14 @@ Place `<media-name>.<marker>.{json,srt,vtt}` next to the media, e.g. `lecture.mp
 }
 ```
 
-For remote media, place a separate `<media-name>.remote` file in the same folder
-(`.remote.json` is also supported). Its contents are JSON:
+For remote media, place a `<media-name>.remote` file in the same folder
+(`.remote.json` is also supported). Media Transcript dynamically resolves
+playback URLs via the Remote plugin (`api.resolve(remoteFile)`) at runtime:
 
-```json
-{
-  "publicUrl": "https://cdn.example.com/video.mp4",
-  "originalName": "video.mp4"
-}
-```
-
-The player uses `publicUrl` instead of a local media file. `originalName` is optional
-metadata; matching is based on the descriptor filename. For example,
-`lecture.whisper.json` finds `lecture.remote` or `lecture.remote.json` even when
-`lecture.mp4` is absent.
+- If a local media file is absent, Media Transcript looks for a sibling `.remote` file and resolves its media URL through the Remote plugin.
+- The resolved URL is fed directly into Media Transcript's own media player, preserving all transcripts, timestamps, search, hotkeys, and sync.
+- No direct parsing or dependency on the remote file's internal format is required.
+- If the Remote plugin is missing or resolution fails, a clear notification is displayed.
 
 ## Settings
 

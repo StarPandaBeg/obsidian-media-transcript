@@ -6,16 +6,17 @@ import {
   findRemoteDescriptorForMedia,
   findRemoteDescriptorForSubtitle,
   remoteDescriptorBaseName,
+  isRemoteDescriptor,
   resolvePriority,
   FoundSubtitleFile,
   SUBTITLE_EXTENSIONS,
 } from './utils/subtitleFinder';
 import {
   parseSubtitle,
-  parsepublicUrl,
   SubtitleSegment,
   formatTime,
 } from './utils/subtitleParser';
+import { resolveRemoteMediaUrl } from './utils/remoteResolver';
 
 // Transcript text size bounds (px). Defined here rather than in settings.ts to
 // keep the import direction one-way: settings.ts → this file.
@@ -49,7 +50,7 @@ export class MediaTranscriptView extends FileView {
   // Kept separately because a remote descriptor may override the local media,
   // or replace it entirely when a transcript is opened on its own.
   private localMediaFile: TFile | null = null;
-  private remotepublicUrl: string | null = null;
+  private remoteMediaUrl: string | null = null;
   private standaloneTrack: FoundSubtitleFile | null = null;
   // When opened via a subtitle file, the track to auto-select instead of the
   // priority-sorted default (null otherwise).
@@ -93,9 +94,35 @@ export class MediaTranscriptView extends FileView {
     this.preferredTrackPath = null;
     this.transcriptSideEl = null;
     this.localMediaFile = null;
-    this.remotepublicUrl = null;
+    this.remoteMediaUrl = null;
     this.remoteIconEl = null;
     this.standaloneTrack = null;
+
+    // Direct opening of a remote media descriptor file
+    if (isRemoteDescriptor(file)) {
+      const remoteResult = await resolveRemoteMediaUrl(this.app, file);
+      if ('error' in remoteResult) {
+        new Notice(remoteResult.error, 8000);
+        this.contentEl.createDiv('mt-empty').setText(remoteResult.error);
+        return;
+      }
+
+      this.mediaFile = file;
+      this.remoteMediaUrl = remoteResult.url;
+      const isAudioDesc = this.plugin.settings.supportedAudioExtensions.some(ext =>
+        file.name.toLowerCase().includes(`.${ext.toLowerCase()}.remote`),
+      );
+      this.isVideo = !isAudioDesc;
+
+      const stem = remoteDescriptorBaseName(file, this.plugin.settings);
+      const remoteMediaStub = {
+        basename: stem,
+        parent: file.parent,
+      } as TFile;
+      this.subtitleTracks = findSubtitleFiles(remoteMediaStub, this.app.vault, this.plugin.settings);
+      await this.buildLayout();
+      return;
+    }
 
     // If a subtitle file was opened directly, resolve the media it belongs to
     // (prefer video, else audio) and play that instead, pre-selecting this track.
@@ -104,13 +131,18 @@ export class MediaTranscriptView extends FileView {
       const resolved = findMediaForSubtitle(file, this.app.vault, this.plugin.settings);
       if (!resolved) {
         const descriptor = findRemoteDescriptorForSubtitle(file, this.app.vault, this.plugin.settings);
-        const publicUrl = descriptor ? await this.readRemotepublicUrl(descriptor) : null;
+        if (descriptor) {
+          const remoteResult = await resolveRemoteMediaUrl(this.app, descriptor);
+          if ('error' in remoteResult) {
+            new Notice(remoteResult.error, 8000);
+            this.contentEl.createDiv('mt-empty').setText(remoteResult.error);
+            return;
+          }
 
-        // A matching remote descriptor lets a transcript play without a
-        // same-named local media file.
-        if (publicUrl && descriptor) {
+          // A matching remote descriptor lets a transcript play without a
+          // same-named local media file.
           this.mediaFile = file;
-          this.remotepublicUrl = publicUrl;
+          this.remoteMediaUrl = remoteResult.url;
           const isAudioDesc = this.plugin.settings.supportedAudioExtensions.some(ext =>
             descriptor.name.toLowerCase().includes(`.${ext.toLowerCase()}.remote`),
           );
@@ -160,21 +192,20 @@ export class MediaTranscriptView extends FileView {
     this.localMediaFile = mediaFile;
 
     const descriptor = findRemoteDescriptorForMedia(mediaFile, this.app.vault);
-    this.remotepublicUrl = descriptor ? await this.readRemotepublicUrl(descriptor) : null;
+    if (descriptor) {
+      const remoteResult = await resolveRemoteMediaUrl(this.app, descriptor);
+      if ('url' in remoteResult) {
+        this.remoteMediaUrl = remoteResult.url;
+      } else {
+        new Notice(remoteResult.error, 8000);
+      }
+    }
 
     this.isVideo = this.plugin.settings.supportedVideoExtensions.includes(
       mediaFile.extension.toLowerCase(),
     );
 
     await this.buildLayout();
-  }
-
-  private async readRemotepublicUrl(file: TFile): Promise<string | null> {
-    try {
-      return parsepublicUrl(await this.app.vault.read(file));
-    } catch {
-      return null;
-    }
   }
 
   /**
@@ -376,7 +407,7 @@ export class MediaTranscriptView extends FileView {
   }
 
   private mediaSource(file: TFile): string {
-    return this.remotepublicUrl ?? this.app.vault.getResourcePath(this.localMediaFile ?? file);
+    return this.remoteMediaUrl ?? this.app.vault.getResourcePath(this.localMediaFile ?? file);
   }
 
   private installMediaErrorHandler(media: HTMLVideoElement | HTMLAudioElement) {
@@ -387,15 +418,19 @@ export class MediaTranscriptView extends FileView {
       // A remote descriptor is an override, not a reason to make an existing
       // local file unusable. If the URL cannot be loaded or decoded, retry the
       // same player with the local vault resource.
-      if (this.remotepublicUrl && this.localMediaFile) {
+      if (this.remoteMediaUrl && this.localMediaFile) {
         const localSource = this.app.vault.getResourcePath(this.localMediaFile);
-        this.remotepublicUrl = null;
+        this.remoteMediaUrl = null;
         this.remoteIconEl?.remove();
         this.remoteIconEl = null;
         new Notice('Remote media could not be played — using the local file.');
         media.src = localSource;
         media.load();
         return;
+      }
+
+      if (this.remoteMediaUrl && !this.localMediaFile) {
+        new Notice(`Failed to load remote media from URL: ${this.remoteMediaUrl}`, 8000);
       }
 
       // A video played through an <audio> element normally works (same
@@ -521,18 +556,18 @@ export class MediaTranscriptView extends FileView {
   private buildToolbar(toolbar: HTMLElement, file: TFile) {
     // Subtitle source selector
     const selectWrap = toolbar.createDiv('mt-select-wrap');
-    if (this.remotepublicUrl) {
+    if (this.remoteMediaUrl) {
       const icon = selectWrap.createSpan({
         cls: 'mt-remote-icon',
         attr: {
-          title: `Remote media: ${this.remotepublicUrl}\n(click to copy URL)`,
+          title: `Remote media: ${this.remoteMediaUrl}\n(click to copy URL)`,
         },
       });
       setIcon(icon, 'globe');
       icon.addEventListener('click', e => {
         e.stopPropagation();
-        if (this.remotepublicUrl) {
-          void navigator.clipboard.writeText(this.remotepublicUrl);
+        if (this.remoteMediaUrl) {
+          void navigator.clipboard.writeText(this.remoteMediaUrl);
           new Notice('Remote media URL copied to clipboard');
         }
       });
