@@ -1,12 +1,7 @@
 import { App, TFile } from 'obsidian';
 
 export const KNOWN_REMOTE_PLUGIN_IDS = [
-  'webdav-archive',
-  'remote-archive',
-  'remote',
-  'obsidian-webdav-archive',
-  'obsidian-remote-archive',
-  'obsidian-remote',
+  'remote-archive'
 ];
 
 export interface WebDavArchiveApi {
