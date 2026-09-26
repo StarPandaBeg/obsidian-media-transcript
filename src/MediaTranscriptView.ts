@@ -28,6 +28,11 @@ export const MAX_FONT_SIZE = 32;
 const MANUAL_SCROLL_GRACE_MS = 4000;
 const MEDIA_ERR_ABORTED = 1;
 
+function isRecoverableDemuxerSeekError(error: MediaError | null): boolean {
+  const message = error?.message.toLowerCase() ?? '';
+  return message.includes('pipeline_error_read') && message.includes('demuxer seek failed');
+}
+
 export const VIEW_TYPE_MEDIA_TRANSCRIPT = 'media-transcript-view';
 
 /** Extract a readable message from an unknown thrown value. */
@@ -436,6 +441,10 @@ export class MediaTranscriptView extends FileView {
       const failedSrc = media.currentSrc || media.getAttribute('src');
       const errorCode = media.error?.code;
 
+      // Chromium/FFmpeg can report this while seeking WebM and then recover on
+      // its own. Replacing src here interrupts that recovery and breaks playback.
+      if (isRecoverableDemuxerSeekError(media.error)) return;
+
       // Changing/removing src raises MEDIA_ERR_ABORTED in Chromium. It is not
       // a playback failure and must never trigger remote → local fallback.
       if (!failedSrc || this.mediaEl !== media || errorCode === MEDIA_ERR_ABORTED) {
@@ -452,7 +461,8 @@ export class MediaTranscriptView extends FileView {
           !currentSrc ||
           currentSrc !== failedSrc ||
           !currentError ||
-          currentError.code === MEDIA_ERR_ABORTED
+          currentError.code === MEDIA_ERR_ABORTED ||
+          isRecoverableDemuxerSeekError(currentError)
         ) {
           return;
         }
