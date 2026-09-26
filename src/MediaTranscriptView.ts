@@ -17,7 +17,6 @@ import {
   formatTime,
 } from './utils/subtitleParser';
 import { resolveRemoteMediaUrl } from './utils/remoteResolver';
-import { inferVideoMimeType } from './utils/mediaType';
 
 // Transcript text size bounds (px). Defined here rather than in settings.ts to
 // keep the import direction one-way: settings.ts → this file.
@@ -27,6 +26,7 @@ export const MAX_FONT_SIZE = 32;
 // After scrolling by hand, leave auto-scroll off this long so reading ahead
 // isn't yanked back to the playing line on the next segment change.
 const MANUAL_SCROLL_GRACE_MS = 4000;
+const MEDIA_ERR_ABORTED = 1;
 
 export const VIEW_TYPE_MEDIA_TRANSCRIPT = 'media-transcript-view';
 
@@ -52,7 +52,6 @@ export class MediaTranscriptView extends FileView {
   // or replace it entirely when a transcript is opened on its own.
   private localMediaFile: TFile | null = null;
   private remoteMediaUrl: string | null = null;
-  private remoteDescriptorFile: TFile | null = null;
   private standaloneTrack: FoundSubtitleFile | null = null;
   // When opened via a subtitle file, the track to auto-select instead of the
   // priority-sorted default (null otherwise).
@@ -97,7 +96,6 @@ export class MediaTranscriptView extends FileView {
     this.transcriptSideEl = null;
     this.localMediaFile = null;
     this.remoteMediaUrl = null;
-    this.remoteDescriptorFile = null;
     this.remoteIconEl = null;
     this.standaloneTrack = null;
 
@@ -125,7 +123,6 @@ export class MediaTranscriptView extends FileView {
 
       this.mediaFile = file;
       this.remoteMediaUrl = remoteResult.url;
-      this.remoteDescriptorFile = file;
       const isAudioDesc = this.plugin.settings.supportedAudioExtensions.some(ext =>
         file.name.toLowerCase().includes(`.${ext.toLowerCase()}.remote`),
       );
@@ -165,7 +162,6 @@ export class MediaTranscriptView extends FileView {
           // same-named local media file.
           this.mediaFile = file;
           this.remoteMediaUrl = remoteResult.url;
-          this.remoteDescriptorFile = descriptor;
           const isAudioDesc = this.plugin.settings.supportedAudioExtensions.some(ext =>
             descriptor.name.toLowerCase().includes(`.${ext.toLowerCase()}.remote`),
           );
@@ -219,7 +215,6 @@ export class MediaTranscriptView extends FileView {
       const remoteResult = await resolveRemoteMediaUrl(this.app, descriptor);
       if ('url' in remoteResult) {
         this.remoteMediaUrl = remoteResult.url;
-        this.remoteDescriptorFile = descriptor;
       } else {
         if (!remoteResult.previewDisabled) {
           new Notice(remoteResult.error, 8000);
@@ -334,7 +329,6 @@ export class MediaTranscriptView extends FileView {
     if (old) {
       old.pause();
       old.removeAttribute('src'); // also disarms the audio-fallback error handler
-      old.querySelectorAll('source').forEach(source => source.remove());
       old.load();
     }
 
@@ -401,7 +395,6 @@ export class MediaTranscriptView extends FileView {
     if (this.mediaEl) {
       this.mediaEl.pause();
       this.mediaEl.removeAttribute('src');
-      this.mediaEl.querySelectorAll('source').forEach(source => source.remove());
       this.mediaEl.load();
     }
   }
@@ -413,17 +406,8 @@ export class MediaTranscriptView extends FileView {
     const wrapper = container.createDiv('mt-player-wrapper');
     this.mediaEl = wrapper.createEl('video', {
       cls: 'mt-media',
-      attr: { controls: '', preload: 'metadata' },
+      attr: { src: resourcePath, controls: '', preload: 'metadata' },
     });
-    const sourceName = this.remoteDescriptorFile?.name ?? file.name;
-    const mimeType = inferVideoMimeType(sourceName, resourcePath);
-    if (mimeType) {
-      this.mediaEl.createEl('source', {
-        attr: { src: resourcePath, type: mimeType },
-      });
-    } else {
-      this.mediaEl.src = resourcePath;
-    }
     this.installMediaErrorHandler(this.mediaEl);
     this.buildSpeedControl(wrapper);
     this.mediaEl.addEventListener('timeupdate', () => this.syncHighlight());
@@ -449,37 +433,56 @@ export class MediaTranscriptView extends FileView {
 
   private installMediaErrorHandler(media: HTMLVideoElement | HTMLAudioElement) {
     media.addEventListener('error', () => {
-      // Teardown clears src first, so ignore its synthetic error event.
-      const hasSource = Boolean(media.getAttribute('src') || media.querySelector('source[src]'));
-      if (!hasSource || this.mediaEl !== media) return;
+      const failedSrc = media.currentSrc || media.getAttribute('src');
+      const errorCode = media.error?.code;
 
-      // A remote descriptor is an override, not a reason to make an existing
-      // local file unusable. If the URL cannot be loaded or decoded, retry the
-      // same player with the local vault resource.
-      if (this.remoteMediaUrl && this.localMediaFile) {
-        const localSource = this.app.vault.getResourcePath(this.localMediaFile);
-        this.remoteMediaUrl = null;
-        this.remoteDescriptorFile = null;
-        this.remoteIconEl?.remove();
-        this.remoteIconEl = null;
-        new Notice('Remote media could not be played — using the local file.');
-        media.src = localSource;
-        media.load();
+      // Changing/removing src raises MEDIA_ERR_ABORTED in Chromium. It is not
+      // a playback failure and must never trigger remote → local fallback.
+      if (!failedSrc || this.mediaEl !== media || errorCode === MEDIA_ERR_ABORTED) {
         return;
       }
 
-      if (this.remoteMediaUrl && !this.localMediaFile) {
-        new Notice(`Failed to load remote media from URL: ${this.remoteMediaUrl}`, 8000);
-      }
+      // Error delivery is asynchronous. Re-check on the next task so a stale
+      // event from a source change cannot act on the newly assigned URL.
+      window.setTimeout(() => {
+        const currentSrc = media.currentSrc || media.getAttribute('src');
+        const currentError = media.error;
+        if (
+          this.mediaEl !== media ||
+          !currentSrc ||
+          currentSrc !== failedSrc ||
+          !currentError ||
+          currentError.code === MEDIA_ERR_ABORTED
+        ) {
+          return;
+        }
 
-      // A video played through an <audio> element normally works (same
-      // demuxers), but some containers refuse. Show the video player instead.
-      if (media instanceof HTMLAudioElement && this.isVideo) {
-        new Notice('This video cannot be played as audio only — showing the picture again.');
-        this.plugin.settings.videoAudioOnly = false;
-        void this.plugin.saveSettings();
-        void this.buildLayout();
-      }
+        // A remote descriptor is an override, not a reason to make an existing
+        // local file unusable. On a confirmed failure, retry the local resource.
+        if (this.remoteMediaUrl && this.localMediaFile) {
+          const localSource = this.app.vault.getResourcePath(this.localMediaFile);
+          this.remoteMediaUrl = null;
+          this.remoteIconEl?.remove();
+          this.remoteIconEl = null;
+          new Notice('Remote media could not be played — using the local file.');
+          media.src = localSource;
+          media.load();
+          return;
+        }
+
+        if (this.remoteMediaUrl && !this.localMediaFile) {
+          new Notice(`Failed to load remote media from URL: ${this.remoteMediaUrl}`, 8000);
+        }
+
+        // A video played through an <audio> element normally works (same
+        // demuxers), but some containers refuse. Show the video player instead.
+        if (media instanceof HTMLAudioElement && this.isVideo) {
+          new Notice('This video cannot be played as audio only — showing the picture again.');
+          this.plugin.settings.videoAudioOnly = false;
+          void this.plugin.saveSettings();
+          void this.buildLayout();
+        }
+      }, 0);
     });
   }
 
